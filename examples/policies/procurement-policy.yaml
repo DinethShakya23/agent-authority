@@ -1,0 +1,19 @@
+apiVersion: agentintegrator.dev/v1alpha1
+kind: AgentPolicy
+metadata: { name: procurement-policy, namespace: finance }
+spec:
+  agentSelector:
+    matchLabels: { wso2.role/procurement-specialist: "true" }
+  requiredScopes: [purchase_order.create]
+  rules:
+    - capability: purchase_order.create
+      target: { integration: sap-production }
+      perRequest:
+        vendor: { allowed: [acme, globex] }
+        amount: { maximum: 10000, currency: USD }
+      budget:
+        scope: execution
+        amount: { total: 25000, currency: USD }
+        calls: { total: 12 }
+      validity: { duration: 5m }
+      delegation: { allowed: true, maxDepth: 2 }

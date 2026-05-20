@@ -1,0 +1,32 @@
+name: agent-integrator
+services:
+  wso2is:
+    image: wso2/wso2is:7.2.0
+    ports: ["9443:9443"]
+  step-ca:
+    image: smallstep/step-ca:latest
+    ports: ["9000:9000"]
+  agentd:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentd }
+    depends_on: [wso2is, step-ca]
+    ports: ["8443:8443"]
+  agentfw-1:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentfw }
+    environment: [REPLICA_ID=fw-1]
+    depends_on: [agentd]
+    ports: ["8080:8080"]
+  agentfw-2:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentfw }
+    environment: [REPLICA_ID=fw-2]
+    depends_on: [agentd]
+    ports: ["8081:8080"]
+  mock-sap:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.mocksap }
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports: ["16686:16686"]
+
+# Two firewall replicas are required: the lease protocol is only exercised
+# when budget is shared across more than one enforcement point.

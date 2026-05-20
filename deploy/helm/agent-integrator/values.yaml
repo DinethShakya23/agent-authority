@@ -1,0 +1,15 @@
+agentd:
+  replicas: 1            # HA with etcd lands in v0.2
+  persistence: { enabled: true, size: 1Gi }
+agentfw:
+  replicas: 2            # minimum 2 to exercise the lease protocol
+  autoscaling: { enabled: false }
+wso2:
+  # External. This chart never deploys WSO2.
+  baseURL: https://wso2.example:9443
+  organization: acme
+  audience: agent-integrator
+ca:
+  provider: cert-manager
+telemetry:
+  otlpEndpoint: http://otel-collector:4317
