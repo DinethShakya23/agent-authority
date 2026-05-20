@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package stages
 
 import (
@@ -33,7 +47,6 @@ func (Validity) Run(ctx context.Context, s *integration.State) (firewall.Outcome
 	now := time.Now().UTC()
 
 	if !v.NotBefore.IsZero() {
-		// Allow up to maxClockSkew before NotBefore.
 		if now.Add(maxClockSkew).Before(v.NotBefore) {
 			s.ReasonCode = string(apierr.CodePassportNotYet)
 			s.ReasonMsg = fmt.Sprintf("passport not yet valid: notBefore=%s now=%s",
@@ -43,7 +56,6 @@ func (Validity) Run(ctx context.Context, s *integration.State) (firewall.Outcome
 	}
 
 	if !v.ExpiresAt.IsZero() {
-		// Allow up to maxClockSkew grace after ExpiresAt.
 		if now.After(v.ExpiresAt.Add(maxClockSkew)) {
 			s.ReasonCode = string(apierr.CodePassportExpired)
 			s.ReasonMsg = fmt.Sprintf("passport expired: expiresAt=%s now=%s",

@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package apiserver
 
 import (
@@ -30,7 +44,6 @@ const clientAPIPrefix = "/apis/agentintegrator.dev/v1alpha1"
 // obj must be JSON-serialisable and must contain top-level "kind", "metadata.name" (and
 // optionally "metadata.namespace") fields.
 func (c *Client) Apply(ctx context.Context, obj any) error {
-	// Re-marshal to a generic map so we can extract routing fields.
 	raw, err := json.Marshal(obj)
 	if err != nil {
 		return fmt.Errorf("apply: marshal: %w", err)
@@ -123,8 +136,6 @@ func (c *Client) Delete(ctx context.Context, kind, ns, name string) error {
 	return nil
 }
 
-// ---- URL builders ----
-
 func (c *Client) resourceURL(kind, ns, name string) string {
 	plural := KindToPlural(kind)
 	if KindIsClusterScoped(kind) {
@@ -139,13 +150,10 @@ func (c *Client) listURL(kind, ns string) string {
 		return fmt.Sprintf("%s%s/%s", c.BaseURL, clientAPIPrefix, plural)
 	}
 	if ns == "" {
-		// all namespaces
 		return fmt.Sprintf("%s%s/%s", c.BaseURL, clientAPIPrefix, plural)
 	}
 	return fmt.Sprintf("%s%s/namespaces/%s/%s", c.BaseURL, clientAPIPrefix, ns, plural)
 }
-
-// ---- helpers ----
 
 // extractMeta pulls kind, namespace, and name out of a raw JSON map.
 func extractMeta(m map[string]json.RawMessage) (kind, ns, name string, err error) {
@@ -177,6 +185,5 @@ func extractMeta(m map[string]json.RawMessage) (kind, ns, name string, err error
 	if rawNS, ok := meta["namespace"]; ok {
 		_ = json.Unmarshal(rawNS, &ns)
 	}
-	// namespace may be empty for cluster-scoped resources
 	return
 }

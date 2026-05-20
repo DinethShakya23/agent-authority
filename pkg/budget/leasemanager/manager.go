@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package leasemanager is the in-process, data-plane implementation of
 // budget.LeaseManager. All operations are in-memory against the local Lease;
 // no network calls are made. This is by design: the data-plane request path
@@ -44,13 +58,11 @@ func New(l *budget.Lease) budget.LeaseManager {
 	}
 }
 
-// newID returns a unique ReservationID.
 func (m *manager) newID() budget.ReservationID {
 	n := atomic.AddInt64(&m.nextID, 1)
 	return budget.ReservationID(fmt.Sprintf("rsv-%d", n))
 }
 
-// parseFloat parses a meter value string; empty → 0.
 func parseFloat(s string) float64 {
 	if s == "" {
 		return 0
@@ -59,7 +71,6 @@ func parseFloat(s string) float64 {
 	return f
 }
 
-// formatFloat converts a float64 to a meter value string.
 func formatFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
@@ -71,12 +82,7 @@ func (m *manager) available(meter string) float64 {
 	consumed := parseFloat(m.lease.Consumed[meter])
 	reserved := 0.0
 	for _, r := range m.reservations {
-		if r.held {
-			// Held reservations are also unavailable.
-			reserved += parseFloat(r.values[meter])
-		} else {
-			reserved += parseFloat(r.values[meter])
-		}
+		reserved += parseFloat(r.values[meter])
 	}
 	return granted - consumed - reserved
 }
@@ -100,7 +106,6 @@ func (m *manager) Reserve(executionID string, values budget.Meters) (budget.Rese
 		val := parseFloat(valStr)
 		avail := m.available(meter)
 		if avail < val {
-			// Pick the most specific error code based on the meter name.
 			code := apierr.CodeBudgetExhausted
 			switch meter {
 			case "calls":
@@ -151,7 +156,6 @@ func (m *manager) Release(id budget.ReservationID) error {
 
 	r, ok := m.reservations[id]
 	if !ok {
-		// Already committed or held — idempotent no-op.
 		return nil
 	}
 	if r.held {
@@ -185,7 +189,6 @@ func (m *manager) Stats() budget.LeaseStats {
 		return budget.LeaseStats{}
 	}
 
-	// Build total Reserved across all pending (including held) reservations.
 	reserved := make(budget.Meters)
 	for _, r := range m.reservations {
 		for meter, valStr := range r.values {
@@ -194,7 +197,6 @@ func (m *manager) Stats() budget.LeaseStats {
 		}
 	}
 
-	// Build Available = Granted - Consumed - Reserved.
 	available := make(budget.Meters)
 	for meter, grantedStr := range m.lease.Granted {
 		granted := parseFloat(grantedStr)

@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package wso2 client.go implements the Federator interface.
 // Token verification uses github.com/golang-jwt/jwt/v5.
 // JWKS is fetched lazily and cached for cfg.JWKSRefresh.
@@ -35,7 +49,7 @@ type client struct {
 	jwksMu    sync.RWMutex
 	jwksCache map[string]interface{} // kid → crypto.PublicKey
 	lastFetch time.Time
-	jwksURI   string // cached from discovery doc
+	jwksURI   string
 }
 
 // NewFederator creates a Federator backed by the given store.
@@ -48,19 +62,14 @@ func NewFederator(cfg Config, s store.Store) Federator {
 	}
 }
 
-// --- JWKS plumbing ---
-
-// discoveryDoc is the minimal structure we need from an OIDC discovery document.
 type discoveryDoc struct {
 	JWKSURI string `json:"jwks_uri"`
 }
 
-// jwksDoc is the JSON structure of a JWKS endpoint response.
 type jwksDoc struct {
 	Keys []jwkKey `json:"keys"`
 }
 
-// jwkKey represents a single JSON Web Key.
 type jwkKey struct {
 	Kty string `json:"kty"`
 	Kid string `json:"kid"`
@@ -72,8 +81,6 @@ type jwkKey struct {
 	X   string `json:"x,omitempty"` // EdDSA public key (base64url)
 }
 
-// fetchJWKS fetches the JWKS and populates the cache if stale.
-// Caller must hold at least a read lock to check staleness, then upgrade.
 func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 	c.jwksMu.RLock()
 	fresh := !c.lastFetch.IsZero() && time.Since(c.lastFetch) < c.cfg.JWKSRefresh
@@ -90,7 +97,6 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 		return nil
 	}
 
-	// Step 1: Fetch the discovery document to get jwks_uri (only once).
 	if c.jwksURI == "" {
 		doc, err := c.fetchJSON(ctx, c.cfg.WellKnown)
 		if err != nil {
@@ -106,7 +112,6 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 		c.jwksURI = dd.JWKSURI
 	}
 
-	// Step 2: Fetch the JWKS.
 	raw, err := c.fetchJSON(ctx, c.jwksURI)
 	if err != nil {
 		return fmt.Errorf("wso2: fetch jwks: %w", err)
@@ -120,7 +125,6 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 	for _, k := range doc.Keys {
 		pub, err := parseJWK(k)
 		if err != nil {
-			// Log and continue — one bad key shouldn't block the rest.
 			continue
 		}
 		newCache[k.Kid] = pub
@@ -130,7 +134,6 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-// fetchJSON performs a GET and returns the response body bytes.
 func (c *client) fetchJSON(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -182,7 +185,6 @@ func parseJWK(k jwkKey) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("jwk OKP: decode x: %w", err)
 		}
-		// ed25519.PublicKey is just []byte.
 		return ed25519PublicKey(xBytes), nil
 	default:
 		return nil, fmt.Errorf("jwk: unsupported kty %q", k.Kty)
@@ -192,9 +194,6 @@ func parseJWK(k jwkKey) (interface{}, error) {
 // ed25519PublicKey is a type alias so we can implement crypto.PublicKey.
 type ed25519PublicKey []byte
 
-// --- actClaims parses the optional "act" claim ---
-
-// actClaims holds the Actor token claim (RFC 8693).
 type actClaims struct {
 	Sub string `json:"sub"`
 }
@@ -207,13 +206,10 @@ type wso2Claims struct {
 	Scopes []string   `json:"scopes,omitempty"`
 }
 
-// --- Federator implementation ---
-
 // Verify validates the JWT token signature, issuer, audience, exp, and nbf.
 // Returns the resolved Principal on success.
 // This MUST NOT be called on the data-plane request path (AIP-1 §5.2, I1).
 func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error) {
-	// Refresh JWKS cache if needed.
 	if err := c.refreshJWKSIfNeeded(ctx); err != nil {
 		return nil, apierr.Newf(apierr.CodeTokenInvalid, "jwks refresh failed: %v", err)
 	}
@@ -227,7 +223,6 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error
 		c.jwksMu.RUnlock()
 
 		if !ok {
-			// If kid is empty or missing, try any key (for single-key setups).
 			if kid == "" {
 				c.jwksMu.RLock()
 				for _, v := range c.jwksCache {
@@ -243,17 +238,12 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error
 		}
 		return pub, nil
 	},
-		jwt.WithIssuer(c.cfg.WellKnown), // issuer from discovery doc (will be overridden below)
+		jwt.WithIssuer(c.cfg.WellKnown),
 		jwt.WithAudience(c.cfg.Audience),
 		jwt.WithExpirationRequired(),
 	)
 
-	// The issuer check above may be wrong if WellKnown != issuer; re-validate manually.
-	// jwt.ParseWithClaims validates exp, nbf, and signature automatically.
 	if err != nil {
-		// Check if it's specifically an issuer error we want to re-examine.
-		// For flexibility, we accept any issuer and check against our allow-list.
-		// We re-parse without issuer check, then validate manually.
 		claims2 := &wso2Claims{}
 		_, err2 := jwt.ParseWithClaims(rawToken, claims2, func(token *jwt.Token) (interface{}, error) {
 			kid, _ := token.Header["kid"].(string)
@@ -285,14 +275,11 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error
 		claims = claims2
 	}
 
-	// Validate issuer manually: must equal cfg.WellKnown base URL or be the
-	// WSO2 issuer URL.
 	issuer, _ := claims.GetIssuer()
 	if issuer == "" {
 		return nil, apierr.New(apierr.CodeIssuerNotAllowed, "missing issuer claim")
 	}
 
-	// Resolve subject per AIP-1 §5.2.
 	sub, _ := claims.GetSubject()
 	agentSubject := sub
 	humanPrincipal := ""
@@ -301,10 +288,8 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error
 		humanPrincipal = sub
 	}
 
-	// Collect scopes.
 	scopes := claims.Scopes
 	if len(scopes) == 0 && claims.Scope != "" {
-		// Some WSO2 versions use a space-separated "scope" string.
 		scopes = splitScope(claims.Scope)
 	}
 
@@ -345,7 +330,6 @@ func (c *client) Resolve(ctx context.Context, p *Principal) (*v1alpha1.Agent, er
 	return &agent, nil
 }
 
-// splitScope splits a space-separated scope string into a slice.
 func splitScope(scope string) []string {
 	if scope == "" {
 		return nil

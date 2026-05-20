@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package delegation verifies monotonic attenuation of Agent Passport chains.
 //
 // A child's authority is a strict subset of its parent's on EVERY dimension.
@@ -26,7 +40,6 @@ type DefaultVerifier struct{}
 
 // Verify implements ChainVerifier.
 func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.AgentPassport, maxDepth int) error {
-	// chain[0] is the root; leaf must equal chain[last].
 	if len(chain) == 0 {
 		return apierr.New(apierr.CodeBrokenChain, "delegation chain is empty")
 	}
@@ -39,21 +52,17 @@ func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.Ag
 	if depth > maxDepth {
 		return apierr.Newf(apierr.CodeDepthExceeded, "depth %d exceeds maxDepth %d", depth, maxDepth)
 	}
-	// Root must have no parent.
 	if chain[0].Spec.Delegation.Parent != "" {
 		return apierr.New(apierr.CodeBrokenChain, "chain[0] must have no parent")
 	}
-	// Verify each link.
 	for i := 1; i < len(chain); i++ {
 		parent := chain[i-1]
 		child := chain[i]
-		// Parent link.
 		if child.Spec.Delegation.Parent != parent.Spec.PassportID {
 			return apierr.Newf(apierr.CodeBrokenChain,
 				"chain[%d].delegation.parent %q != chain[%d].passportID %q",
 				i, child.Spec.Delegation.Parent, i-1, parent.Spec.PassportID)
 		}
-		// Depth counter.
 		if child.Spec.Delegation.Depth != parent.Spec.Delegation.Depth+1 {
 			return apierr.Newf(apierr.CodeBrokenChain,
 				"chain[%d].depth %d != chain[%d].depth+1 %d",
@@ -93,7 +102,7 @@ func checkMonotonicity(parent, child *v1alpha1.AgentPassport) error {
 				"child has perRequest constraint %q not present in parent", field)
 		}
 		if childC.Maximum != "" && parentC.Maximum != "" {
-			if childC.Maximum > parentC.Maximum { // lexicographic; real impl uses decimal compare
+			if childC.Maximum > parentC.Maximum {
 				return apierr.Newf(apierr.CodeMonotonicity,
 					"child perRequest[%s].maximum %s exceeds parent %s", field, childC.Maximum, parentC.Maximum)
 			}

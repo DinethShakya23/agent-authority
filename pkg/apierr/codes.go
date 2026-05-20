@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package apierr defines the stable AI-xxxx reason codes.
 //
 //	AI-11xx WSO2 identity   AI-1xxx certificate   AI-2xxx passport
@@ -84,23 +98,23 @@ func HTTPStatus(c Code) int {
 	switch {
 	case c == CodeOK:
 		return 200
-	case c >= "AI-1101" && c <= "AI-1107", // WSO2 identity
-		c >= "AI-1001" && c <= "AI-1004", // certificate
-		c >= "AI-2001" && c <= "AI-2006", // passport
-		c >= "AI-3001" && c <= "AI-3003": // signature
+	case c >= "AI-1101" && c <= "AI-1107",
+		c >= "AI-1001" && c <= "AI-1004",
+		c >= "AI-2001" && c <= "AI-2006",
+		c >= "AI-3001" && c <= "AI-3003":
 		return 401
-	case c >= "AI-4001" && c <= "AI-4002": // replay
+	case c >= "AI-4001" && c <= "AI-4002":
 		return 409
-	case c >= "AI-5001" && c <= "AI-5005", // authority
-		c >= "AI-7001" && c <= "AI-7004": // delegation
+	case c >= "AI-5001" && c <= "AI-5005",
+		c >= "AI-7001" && c <= "AI-7004":
 		return 403
-	case c >= "AI-6001" && c <= "AI-6005": // budget
+	case c >= "AI-6001" && c <= "AI-6005":
 		return 429
 	case c == CodeApprovalRequired:
 		return 202
-	case c >= "AI-8002" && c <= "AI-8003": // approval denied/timeout
+	case c >= "AI-8002" && c <= "AI-8003":
 		return 403
-	case c >= "AI-9001" && c <= "AI-9003": // internal
+	case c >= "AI-9001" && c <= "AI-9003":
 		return 503
 	default:
 		return 500

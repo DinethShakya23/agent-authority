@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package budget implements execution-scoped cumulative authority.
 //
 // SAFETY: grants are deducted from the budget BEFORE the lease is returned.
@@ -13,15 +27,15 @@ import (
 )
 
 // Meters maps meter names to their current values (decimal strings).
-type Meters map[string]string // e.g. {"amount": "4000", "calls": "1"}
+type Meters map[string]string
 
 // Budget is the execution-level authoritative record, held only by the control plane.
 type Budget struct {
 	ExecutionID string
 	Epoch       uint64
-	Limits      Meters // authoritative total limits
-	Remaining   Meters // currently available (Limits - pre-deducted leases)
-	Leased      Meters // currently out on active leases (informational)
+	Limits      Meters
+	Remaining   Meters
+	Leased      Meters
 }
 
 // Lease is a pre-deducted budget slice held by one firewall replica.
@@ -31,9 +45,9 @@ type Lease struct {
 	ExecutionID string
 	ReplicaID   string
 	Epoch       uint64
-	Granted     Meters    // pre-deducted from Budget.Remaining
-	Consumed    Meters    // reported consumed so far
-	Reserved    Meters    // currently reserved within this lease
+	Granted     Meters
+	Consumed    Meters
+	Reserved    Meters
 	IssuedAt    time.Time
 	ExpiresAt   time.Time // default TTL 30s
 }

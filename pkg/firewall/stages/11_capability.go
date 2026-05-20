@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package stages
 
 import (
@@ -23,10 +37,7 @@ type CapabilityChecker interface {
 // Capability verifies that the passport authority grants the capability and
 // resource type required for this request (step 11 of §9.4).
 type Capability struct {
-	// requiredCapability is the capability name that must be present in the passport.
-	requiredCapability string
-	// requiredResourceType is the resource type that must be listed in passport.authority.resources.
-	// Empty means no resource type check.
+	requiredCapability   string
 	requiredResourceType string
 }
 
@@ -50,7 +61,6 @@ func (c Capability) Run(ctx context.Context, s *integration.State) (firewall.Out
 
 	auth := s.Passport.Spec.Authority
 
-	// Check capability presence.
 	if c.requiredCapability != "" {
 		found := false
 		for _, cap := range auth.Capabilities {
@@ -66,7 +76,6 @@ func (c Capability) Run(ctx context.Context, s *integration.State) (firewall.Out
 		}
 	}
 
-	// Check resource type presence.
 	if c.requiredResourceType != "" {
 		found := false
 		for _, res := range auth.Resources {

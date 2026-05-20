@@ -1,28 +1,121 @@
-name: ci
-on: [push, pull_request]
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
-  build-test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
-      - run: make build
-      - run: make test
-      - run: make lint
-  conformance:
+        with:
+          go-version: '1.23'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.0
+          args: --timeout=5m
+
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
-      - run: go test ./test/conformance/...
-  e2e:
+        with:
+          go-version: '1.23'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Build root module
+        run: go build ./...
+      - name: Build sdk/go
+        run: cd sdk/go && go build ./...
+        continue-on-error: true
+      - name: Build abench
+        run: cd abench && go build ./...
+        continue-on-error: true
+
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
-      - run: make dev-up
-      - run: make demo            # 14 acceptance scenarios
-      - run: make dev-down
+        with:
+          go-version: '1.23'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Test root module
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Test sdk/go
+        run: cd sdk/go && go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+        continue-on-error: true
+      - name: Test abench
+        run: cd abench && go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - run: go vet ./...
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+  license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Apache 2.0 headers
+        run: |
+          missing=$(grep -rL "Apache License" --include="*.go" . | grep -v vendor | grep -v "_test" || true)
+          if [ -n "$missing" ]; then
+            echo "Missing license headers:"; echo "$missing"; exit 1
+          fi

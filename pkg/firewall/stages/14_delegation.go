@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package stages
 
 import (
@@ -22,8 +36,8 @@ import (
 type Delegation struct {
 	verifier        passport.Verifier
 	chainVerifier   delegation.ChainVerifier
-	bundle          interface{ Subjects() []string } // *x509.CertPool — kept as crypto/x509.CertPool
-	bundlePool      interface{}                      // holds *x509.CertPool for Verify calls
+	bundle          interface{ Subjects() []string }
+	bundlePool      interface{}
 	maxDepth        int
 }
 
@@ -44,16 +58,14 @@ func NewDelegation(
 	}
 }
 
-// delegationWithBundle holds a cert pool reference for JWS verification.
 type delegationWithBundle struct {
 	Delegation
-	pool interface{ Subjects() []string } // actually *x509.CertPool
+	pool interface{ Subjects() []string }
 }
 
 func (Delegation) Name() string { return "14_delegation" }
 
 func (d Delegation) Run(ctx context.Context, s *integration.State) (firewall.Outcome, error) {
-	// No AI-Chain header: delegation check is a no-op.
 	if len(s.ChainJWSs) == 0 {
 		return firewall.Continue, nil
 	}
@@ -64,10 +76,9 @@ func (d Delegation) Run(ctx context.Context, s *integration.State) (firewall.Out
 		return firewall.Deny, nil
 	}
 
-	// Parse each JWS in the chain.
 	chain := make([]*v1alpha1.AgentPassport, 0, len(s.ChainJWSs))
 	for i, jws := range s.ChainJWSs {
-		p, err := d.verifier.Verify(jws, nil) // nil bundle: verifier uses its own trust bundle
+		p, err := d.verifier.Verify(jws, nil)
 		if err != nil {
 			s.ReasonCode = string(apierr.CodeBrokenChain)
 			s.ReasonMsg = fmt.Sprintf("chain[%d] JWS verification failed: %v", i, err)
@@ -76,15 +87,13 @@ func (d Delegation) Run(ctx context.Context, s *integration.State) (firewall.Out
 		chain = append(chain, p)
 	}
 
-	// Full chain = parsed chain passports + leaf passport.
 	fullChain := make([]*v1alpha1.AgentPassport, 0, len(chain)+1)
 	fullChain = append(fullChain, chain...)
 	fullChain = append(fullChain, s.Passport)
 
-	// Verify monotonic attenuation.
 	maxDepth := d.maxDepth
 	if maxDepth == 0 {
-		maxDepth = 8 // default reasonable limit
+		maxDepth = 8
 	}
 	if err := d.chainVerifier.Verify(fullChain, s.Passport, maxDepth); err != nil {
 		if aerr, ok := err.(*apierr.Error); ok {
@@ -97,7 +106,6 @@ func (d Delegation) Run(ctx context.Context, s *integration.State) (firewall.Out
 		return firewall.Deny, nil
 	}
 
-	// Populate chain passports (excluding the leaf which is already in s.Passport).
 	s.ChainPassports = chain
 	return firewall.Continue, nil
 }

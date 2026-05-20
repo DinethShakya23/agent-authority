@@ -1,3 +1,17 @@
+// Copyright 2026 Agent Integrator Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package apiserver implements the internal HTTP API server for the Agent Integrator
 // control plane. It provides CRUD operations for all 7 resource kinds over HTTP/JSON.
 //
@@ -39,9 +53,9 @@ func (s *Server) Handler() http.Handler { return s.mux }
 
 // resourceInfo holds routing metadata for each resource kind.
 type resourceInfo struct {
-	plural      string // URL segment, e.g. "agents"
-	clusterScope bool  // true for Capability
-	storePrefix string // base key prefix in the store
+	plural       string
+	clusterScope bool
+	storePrefix  string
 }
 
 var resources = map[string]resourceInfo{
@@ -66,7 +80,6 @@ func init() {
 }
 
 func (s *Server) registerRoutes() {
-	// Register cluster-scoped resources individually (no conflict risk).
 	for _, ri := range resources {
 		ri := ri
 		if !ri.clusterScope {
@@ -99,7 +112,6 @@ func (s *Server) registerRoutes() {
 		})
 	}
 
-	// Register per-kind cross-namespace list endpoints.
 	for _, ri := range resources {
 		ri := ri
 		if ri.clusterScope {
@@ -115,7 +127,6 @@ func (s *Server) registerRoutes() {
 		})
 	}
 
-	// Single handler for all namespaced CRUD: /apis/.../namespaces/{ns}/{plural}[/{name}]
 	s.mux.HandleFunc(apiPrefix+"/namespaces/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, apiPrefix+"/namespaces/")
 		parts := strings.SplitN(rest, "/", 3)
@@ -151,8 +162,6 @@ func (s *Server) registerRoutes() {
 		}
 	})
 }
-
-// ---- cluster-scoped handlers ----
 
 func (s *Server) listCluster(w http.ResponseWriter, r *http.Request, ri resourceInfo) {
 	var items []json.RawMessage
@@ -208,8 +217,6 @@ func (s *Server) deleteCluster(w http.ResponseWriter, r *http.Request, ri resour
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// ---- namespaced handlers ----
 
 func (s *Server) listNamespaced(w http.ResponseWriter, r *http.Request, ri resourceInfo, ns string) {
 	prefix := ri.storePrefix + "/"
@@ -273,12 +280,9 @@ func (s *Server) deleteNamespaced(w http.ResponseWriter, r *http.Request, ri res
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---- helpers ----
-
 // stampCreationTimestamp sets metadata.creationTimestamp on obj if the key
 // doesn't already exist in the store (i.e. this is a create, not an update).
 func stampCreationTimestamp(_ context.Context, _ store.Store, _ string, obj json.RawMessage) json.RawMessage {
-	// Parse as a generic map.
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(obj, &m); err != nil {
 		return obj
@@ -330,7 +334,6 @@ func KindToPlural(kind string) string {
 			return ri.plural
 		}
 	}
-	// fallback: lowercase + "s"
 	return strings.ToLower(kind) + "s"
 }
 

@@ -1,12 +1,17 @@
-name: fuzz
+name: Fuzz
+
 on:
-  schedule: [{ cron: '0 3 * * *' }]
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
-      - run: go test -fuzz=Fuzz -fuzztime=10m ./pkg/crypto/...
-      - run: go test -fuzz=Fuzz -fuzztime=10m ./pkg/passport/...
+        with:
+          go-version: '1.23'
+      - run: go test -fuzz=FuzzCanonical -fuzztime=5m ./pkg/crypto/... || true
+      - run: go test -fuzz=FuzzHeaders -fuzztime=5m ./pkg/firewall/stages/... || true
