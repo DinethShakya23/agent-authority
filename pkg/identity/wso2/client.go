@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package wso2 client.go implements the Federator interface.
+// Package wso2 client.go — implements identity.Federator for WSO2.
 // Token verification uses github.com/golang-jwt/jwt/v5.
 // JWKS is fetched lazily and cached for cfg.JWKSRefresh.
 //
-// Token shapes (AIP-1 §5.2):
-//
-//	autonomous:    sub = agent_id
-//	on-behalf-of:  sub = human_id, act.sub = agent_id
+// WSO2-specific behaviour (vs. the generic OIDC adapter):
+//   - The WellKnown URL is also accepted as the issuer claim value,
+//     because WSO2 Identity Server may set iss to the discovery endpoint.
+//   - Falls back to issuer-agnostic verification when strict issuer check fails,
+//     so deployments that haven't configured WSO2's issuer claim are not broken.
 package wso2
 
 import (
@@ -37,30 +38,33 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
 	"github.com/thev1ndu/agent-integrator/pkg/apierr"
+	"github.com/thev1ndu/agent-integrator/pkg/identity"
 	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
 
-// client implements Federator.
+// client implements identity.Federator for WSO2.
 type client struct {
 	cfg        Config
 	store      store.Store
 	httpClient *http.Client
 
 	jwksMu    sync.RWMutex
-	jwksCache map[string]interface{} // kid → crypto.PublicKey
+	jwksCache map[string]any // kid → crypto.PublicKey
 	lastFetch time.Time
 	jwksURI   string
 }
 
-// NewFederator creates a Federator backed by the given store.
-func NewFederator(cfg Config, s store.Store) Federator {
+// NewFederator creates a WSO2-backed identity.Federator.
+func NewFederator(cfg Config, s store.Store) identity.Federator {
 	return &client{
 		cfg:        cfg,
 		store:      s,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
-		jwksCache:  make(map[string]interface{}),
+		jwksCache:  make(map[string]any),
 	}
 }
+
+func (c *client) ProviderType() string { return "wso2" }
 
 type discoveryDoc struct {
 	JWKSURI string `json:"jwks_uri"`
@@ -75,10 +79,10 @@ type jwkKey struct {
 	Kid string `json:"kid"`
 	Use string `json:"use,omitempty"`
 	Alg string `json:"alg,omitempty"`
-	N   string `json:"n,omitempty"` // RSA modulus (base64url)
-	E   string `json:"e,omitempty"` // RSA exponent (base64url)
-	Crv string `json:"crv,omitempty"` // EdDSA curve, e.g. "Ed25519"
-	X   string `json:"x,omitempty"` // EdDSA public key (base64url)
+	N   string `json:"n,omitempty"`
+	E   string `json:"e,omitempty"`
+	Crv string `json:"crv,omitempty"`
+	X   string `json:"x,omitempty"`
 }
 
 func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
@@ -92,7 +96,6 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 	c.jwksMu.Lock()
 	defer c.jwksMu.Unlock()
 
-	// Double-check under write lock.
 	if !c.lastFetch.IsZero() && time.Since(c.lastFetch) < c.cfg.JWKSRefresh {
 		return nil
 	}
@@ -121,7 +124,7 @@ func (c *client) refreshJWKSIfNeeded(ctx context.Context) error {
 		return fmt.Errorf("wso2: parse jwks: %w", err)
 	}
 
-	newCache := make(map[string]interface{}, len(doc.Keys))
+	newCache := make(map[string]any, len(doc.Keys))
 	for _, k := range doc.Keys {
 		pub, err := parseJWK(k)
 		if err != nil {
@@ -161,9 +164,7 @@ func (c *client) fetchJSON(ctx context.Context, url string) ([]byte, error) {
 	return buf, nil
 }
 
-// parseJWK converts a JWK entry to a crypto.PublicKey.
-// v0.1 supports RSA (RS256) and Ed25519 (EdDSA).
-func parseJWK(k jwkKey) (interface{}, error) {
+func parseJWK(k jwkKey) (any, error) {
 	switch k.Kty {
 	case "RSA":
 		nBytes, err := base64.RawURLEncoding.DecodeString(k.N)
@@ -191,14 +192,12 @@ func parseJWK(k jwkKey) (interface{}, error) {
 	}
 }
 
-// ed25519PublicKey is a type alias so we can implement crypto.PublicKey.
 type ed25519PublicKey []byte
 
 type actClaims struct {
 	Sub string `json:"sub"`
 }
 
-// wso2Claims extends jwt.RegisteredClaims with WSO2-specific fields.
 type wso2Claims struct {
 	jwt.RegisteredClaims
 	Act    *actClaims `json:"act,omitempty"`
@@ -207,65 +206,41 @@ type wso2Claims struct {
 }
 
 // Verify validates the JWT token signature, issuer, audience, exp, and nbf.
-// Returns the resolved Principal on success.
-// This MUST NOT be called on the data-plane request path (AIP-1 §5.2, I1).
-func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error) {
+// Returns the provider-agnostic Principal on success.
+// MUST NOT be called on the data-plane request path (AIP-1 §5.2, I1).
+func (c *client) Verify(ctx context.Context, rawToken string) (*identity.Principal, error) {
 	if err := c.refreshJWKSIfNeeded(ctx); err != nil {
 		return nil, apierr.Newf(apierr.CodeTokenInvalid, "jwks refresh failed: %v", err)
 	}
 
-	claims := &wso2Claims{}
-	_, err := jwt.ParseWithClaims(rawToken, claims, func(token *jwt.Token) (interface{}, error) {
+	keyFunc := func(token *jwt.Token) (any, error) {
 		kid, _ := token.Header["kid"].(string)
-
 		c.jwksMu.RLock()
 		pub, ok := c.jwksCache[kid]
-		c.jwksMu.RUnlock()
-
-		if !ok {
-			if kid == "" {
-				c.jwksMu.RLock()
-				for _, v := range c.jwksCache {
-					pub = v
-					ok = true
-					break
-				}
-				c.jwksMu.RUnlock()
-			}
-			if !ok {
-				return nil, apierr.Newf(apierr.CodeTokenInvalid, "unknown kid %q", kid)
+		if !ok && kid == "" {
+			for _, v := range c.jwksCache {
+				pub, ok = v, true
+				break
 			}
 		}
+		c.jwksMu.RUnlock()
+		if !ok {
+			return nil, apierr.Newf(apierr.CodeTokenInvalid, "unknown kid %q", kid)
+		}
 		return pub, nil
-	},
+	}
+
+	claims := &wso2Claims{}
+	_, err := jwt.ParseWithClaims(rawToken, claims, keyFunc,
 		jwt.WithIssuer(c.cfg.WellKnown),
 		jwt.WithAudience(c.cfg.Audience),
 		jwt.WithExpirationRequired(),
 	)
-
 	if err != nil {
+		// WSO2 fallback: some deployments don't set iss to the WellKnown URL.
+		// Retry without issuer constraint and accept if signature + aud + exp are valid.
 		claims2 := &wso2Claims{}
-		_, err2 := jwt.ParseWithClaims(rawToken, claims2, func(token *jwt.Token) (interface{}, error) {
-			kid, _ := token.Header["kid"].(string)
-			c.jwksMu.RLock()
-			pub, ok := c.jwksCache[kid]
-			c.jwksMu.RUnlock()
-			if !ok {
-				if kid == "" {
-					c.jwksMu.RLock()
-					for _, v := range c.jwksCache {
-						pub = v
-						ok = true
-						break
-					}
-					c.jwksMu.RUnlock()
-				}
-				if !ok {
-					return nil, apierr.Newf(apierr.CodeTokenInvalid, "unknown kid %q", kid)
-				}
-			}
-			return pub, nil
-		},
+		_, err2 := jwt.ParseWithClaims(rawToken, claims2, keyFunc,
 			jwt.WithAudience(c.cfg.Audience),
 			jwt.WithExpirationRequired(),
 		)
@@ -299,24 +274,21 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*Principal, error
 		expiresAt = expTime.Time
 	}
 
-	jti := claims.ID
-
-	return &Principal{
+	return &identity.Principal{
 		AgentSubject:   agentSubject,
 		HumanPrincipal: humanPrincipal,
 		Scopes:         scopes,
 		Issuer:         issuer,
-		JTI:            jti,
+		ProviderType:   "wso2",
+		JTI:            claims.ID,
 		ExpiresAt:      expiresAt,
 	}, nil
 }
 
-// Resolve maps the Principal's AgentSubject to a registered Agent resource.
-// Returns apierr.CodeNoAgentMapping if no Agent is found.
-func (c *client) Resolve(ctx context.Context, p *Principal) (*v1alpha1.Agent, error) {
-	key := fmt.Sprintf("agents-by-wso2subject/%s/%s", p.Issuer, p.AgentSubject)
+// Resolve maps the Principal's AgentSubject+Issuer to a registered Agent.
+func (c *client) Resolve(ctx context.Context, p *identity.Principal) (*v1alpha1.Agent, error) {
 	var agent v1alpha1.Agent
-	if err := c.store.Get(ctx, key, &agent); err != nil {
+	if err := c.store.Get(ctx, p.SubjectKey(), &agent); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, apierr.Newf(apierr.CodeNoAgentMapping,
 				"no agent registered for issuer=%s subject=%s", p.Issuer, p.AgentSubject)

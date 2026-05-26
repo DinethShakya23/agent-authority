@@ -56,14 +56,16 @@ type AgentOwner struct {
 }
 
 type AgentStatus struct {
-	Phase            string          `json:"phase,omitempty"`
-	IdentityResolved bool            `json:"identityResolved,omitempty"`
-	WSO2             AgentWSO2Status `json:"wso2,omitempty"`
-	Epoch            uint64          `json:"epoch,omitempty"`
-	ActivePassports  int             `json:"activePassports,omitempty"`
+	Phase            string             `json:"phase,omitempty"`
+	IdentityResolved bool               `json:"identityResolved,omitempty"`
+	ProviderSync     ProviderSyncStatus `json:"providerSync,omitempty"`
+	Epoch            uint64             `json:"epoch,omitempty"`
+	ActivePassports  int                `json:"activePassports,omitempty"`
 }
 
-type AgentWSO2Status struct {
+// ProviderSyncStatus records the last synchronisation from the identity provider.
+// Populated only when ManagedBy is set (e.g. the SCIM2 sync for WSO2).
+type ProviderSyncStatus struct {
 	LastSyncedAt time.Time `json:"lastSyncedAt,omitempty"`
 	Roles        []string  `json:"roles,omitempty"`
 }

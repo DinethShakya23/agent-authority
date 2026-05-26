@@ -14,7 +14,7 @@
 
 // Package apierr defines the stable AI-xxxx reason codes.
 //
-//	AI-11xx WSO2 identity   AI-1xxx certificate   AI-2xxx passport
+//	AI-11xx identity/federation   AI-1xxx certificate   AI-2xxx passport
 //	AI-3xxx signature       AI-4xxx replay        AI-5xxx authority
 //	AI-6xxx budget          AI-7xxx delegation    AI-8xxx approval
 //	AI-9xxx internal (fail closed)

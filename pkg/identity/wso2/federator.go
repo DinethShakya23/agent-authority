@@ -12,52 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package wso2 federates identity from the WSO2 Identity Platform.
+// Package wso2 provides an identity adapter for the WSO2 Identity Platform.
 //
-// Two token shapes are accepted:
+// It implements identity.Federator and self-registers as provider type "wso2".
+// Import this package (blank import) to activate WSO2 support:
+//
+//	import _ "github.com/thev1ndu/agent-integrator/pkg/identity/wso2"
+//
+// Two token shapes are accepted (AIP-1 §5.2):
 //
 //	autonomous:    sub = agent_id
 //	on-behalf-of:  sub = human_id, act.sub = agent_id
 //
-// Resolution rule (normative per AIP-1 §5.2):
+// ProviderConfig.Extras keys recognised by this adapter:
 //
-//	if token.act.sub exists:
-//	    agentSubject   = token.act.sub   // the acting agent
-//	    humanPrincipal = token.sub       // recorded in passport + every receipt
-//	else:
-//	    agentSubject   = token.sub
-//	    humanPrincipal = ""
-//
-// Token verification happens ONLY at passport issuance, never per request (I1).
+//	"organization"               (string) – WSO2 tenant path segment (/t/{org})
+//	"introspect"                 (bool)   – enable token introspection
+//	"introspect_credentials_ref" (string) – secret reference for introspection credentials
 package wso2
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
+	"github.com/thev1ndu/agent-integrator/pkg/identity"
+	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
 
-// Principal is the resolved identity after token verification.
-type Principal struct {
-	AgentSubject   string    // act.sub if present, else sub
-	HumanPrincipal string    // sub when act present, else ""
-	Scopes         []string  // OAuth scopes from the token
-	Issuer         string
-	JTI            string    // JWT ID for replay prevention at issuance
-	ExpiresAt      time.Time
+func init() {
+	identity.DefaultRegistry.Register("wso2", Factory)
 }
 
-// Federator verifies WSO2 tokens and resolves them to registered Agents.
-type Federator interface {
-	// Verify validates the token signature, issuer allow-list, audience, exp/nbf,
-	// and optionally calls WSO2 introspection. Returns the resolved Principal.
-	// This MUST NOT be called on the data-plane request path.
-	Verify(ctx context.Context, rawToken string) (*Principal, error)
-
-	// Resolve maps the Principal's AgentSubject to a registered Agent resource.
-	// Returns apierr.CodeNoAgentMapping if no Agent is found.
-	Resolve(ctx context.Context, p *Principal) (*v1alpha1.Agent, error)
+// Factory creates a WSO2-backed identity.Federator from a ProviderConfig.
+// Called by identity.DefaultRegistry.Build when Type == "wso2".
+func Factory(cfg identity.ProviderConfig, s store.Store) (identity.Federator, error) {
+	if cfg.WellKnown == "" {
+		return nil, fmt.Errorf("wso2: ProviderConfig.WellKnown is required")
+	}
+	wCfg := Config{
+		WellKnown:        cfg.WellKnown,
+		Audience:         cfg.Audience,
+		JWKSRefresh:      cfg.JWKSRefresh,
+		AcceptOnBehalfOf: cfg.AcceptOnBehalfOf,
+	}
+	if org, ok := cfg.Extras["organization"].(string); ok {
+		wCfg.Organization = org
+	}
+	if v, ok := cfg.Extras["introspect"].(bool); ok {
+		wCfg.Introspect = v
+	}
+	if ref, ok := cfg.Extras["introspect_credentials_ref"].(string); ok {
+		wCfg.IntrospectCredentialsRef = ref
+	}
+	return NewFederator(wCfg, s), nil
 }
 
 // SCIMSync imports agents from WSO2's SCIM2 endpoint and materialises them
@@ -68,26 +76,25 @@ type SCIMSync interface {
 	Sync(ctx context.Context) (added, updated, suspended int, err error)
 }
 
-// Config holds WSO2 connection parameters (loaded from agentd.yaml §17).
+// Config holds WSO2-specific connection parameters (loaded from agentd.yaml §17).
+// Generic fields (WellKnown, Audience, JWKSRefresh, AcceptOnBehalfOf) are
+// populated from ProviderConfig by Factory.
 type Config struct {
-	BaseURL      string
-	Organization string // /t/{org}
-	WellKnown    string // OIDC discovery URL
-	Audience     string // expected aud claim value, e.g. "agent-integrator"
-	JWKSRefresh  time.Duration
-	Introspect   bool
+	Organization             string        // /t/{org} tenant path
+	WellKnown                string        // OIDC discovery URL (also used as issuer in WSO2)
+	Audience                 string        // expected aud claim value
+	JWKSRefresh              time.Duration
+	Introspect               bool
 	IntrospectCredentialsRef string
-
-	AcceptOnBehalfOf bool // honour the act claim
-
-	SCIM2 SCIM2Config
+	AcceptOnBehalfOf         bool
+	SCIM2                    SCIM2Config
 }
 
 // SCIM2Config holds settings for the optional agent roster sync.
 type SCIM2Config struct {
-	Enabled        bool
-	Endpoint       string
-	CredentialsRef string
-	SyncInterval   time.Duration
+	Enabled         bool
+	Endpoint        string
+	CredentialsRef  string
+	SyncInterval    time.Duration
 	RoleLabelPrefix string // e.g. "wso2.role/"
 }

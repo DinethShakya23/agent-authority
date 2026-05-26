@@ -26,7 +26,7 @@ import (
 	"context"
 
 	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/identity/wso2"
+	"github.com/thev1ndu/agent-integrator/pkg/identity"
 )
 
 // ExecutionRequest is the agent's request to create an execution.
@@ -41,7 +41,7 @@ type ExecutionRequest struct {
 type Grant struct {
 	ExecutionID  string
 	Agent        *v1alpha1.Agent
-	Principal    *wso2.Principal
+	Principal    *identity.Principal
 	Policy       *v1alpha1.AgentPolicy
 	PolicyRev    int
 	Capabilities []string
@@ -82,7 +82,7 @@ type PolicyEngine interface {
 	// Derive selects the matching AgentPolicy for the agent + principal,
 	// validates required scopes, and returns the Grant.
 	// Returns an error with AI-1105 if required scopes are missing.
-	Derive(ctx context.Context, a *v1alpha1.Agent, pr *wso2.Principal, req ExecutionRequest) (Grant, error)
+	Derive(ctx context.Context, a *v1alpha1.Agent, pr *identity.Principal, req ExecutionRequest) (Grant, error)
 
 	// EvaluateRequest evaluates the stateless per-request predicates (Cedar).
 	// Called on the data-plane request path; must be deterministic and fast.
