@@ -1,0 +1,53 @@
+# Claude Code
+.claude/worktrees/
+.claude/settings.local.json
+
+# Build outputs
+/bin/
+/dist/
+*.o
+*.a
+
+# Go
+vendor/
+*.test
+*.out
+coverage.html
+coverage.txt
+cpu.prof
+mem.prof
+
+# Benchmark results are append-only artefacts committed deliberately — do not ignore abench/results/
+
+# Local dev secrets and config overrides
+*.local.yaml
+*.local.env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# TLA+ toolchain outputs
+*.tla.log
+*.dot
+*.pdf
+model/
+
+# Tamarin outputs
+*.spthy.log
+*.aif
+
+# Docker
+docker-compose.override.yml
+
+# Release artefacts (goreleaser)
+/release/
