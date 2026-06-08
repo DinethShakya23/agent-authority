@@ -12,22 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver implements the internal HTTP API server for the Agent Integrator
-// control plane. It provides CRUD operations for all 7 resource kinds over HTTP/JSON.
-//
-// Key layout (from _.md §16):
-//
-//	agents/{ns}/{name}
-//	capabilities/{name}           (cluster-scoped)
-//	policies/{ns}/{name}
-//	integrations/{ns}/{name}
-//	executions/{ns}/{execID}
-//	passports/{ns}/{passportID}
 package apiserver
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -35,23 +25,19 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
 
-// Server handles CRUD for all resource kinds over HTTP/JSON.
 type Server struct {
 	store store.Store
 	mux   *http.ServeMux
 }
 
-// New creates a new Server wired to the given store.
 func New(s store.Store) *Server {
 	srv := &Server{store: s, mux: http.NewServeMux()}
 	srv.registerRoutes()
 	return srv
 }
 
-// Handler returns the http.Handler for mounting under a prefix.
 func (s *Server) Handler() http.Handler { return s.mux }
 
-// resourceInfo holds routing metadata for each resource kind.
 type resourceInfo struct {
 	plural       string
 	clusterScope bool
@@ -69,7 +55,6 @@ var resources = map[string]resourceInfo{
 
 const apiPrefix = "/apis/agentintegrator.dev/v1alpha1"
 
-// pluralToResource maps the URL plural segment back to resourceInfo for dispatch.
 var pluralToResource map[string]resourceInfo
 
 func init() {
@@ -81,13 +66,16 @@ func init() {
 
 func (s *Server) registerRoutes() {
 	for _, ri := range resources {
-		ri := ri
 		if !ri.clusterScope {
 			continue
 		}
 		s.mux.HandleFunc(apiPrefix+"/"+ri.plural, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if r.URL.Query().Get("watch") == "true" {
+				s.watchStream(w, r, ri.storePrefix+"/")
 				return
 			}
 			s.listCluster(w, r, ri)
@@ -113,7 +101,6 @@ func (s *Server) registerRoutes() {
 	}
 
 	for _, ri := range resources {
-		ri := ri
 		if ri.clusterScope {
 			continue
 		}
@@ -123,6 +110,14 @@ func (s *Server) registerRoutes() {
 				return
 			}
 			ns := r.URL.Query().Get("namespace")
+			if r.URL.Query().Get("watch") == "true" {
+				prefix := ri.storePrefix + "/"
+				if ns != "" {
+					prefix = ri.storePrefix + "/" + ns + "/"
+				}
+				s.watchStream(w, r, prefix)
+				return
+			}
 			s.listNamespaced(w, r, ri, ns)
 		})
 	}
@@ -144,6 +139,10 @@ func (s *Server) registerRoutes() {
 		if len(parts) == 2 || parts[2] == "" {
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if r.URL.Query().Get("watch") == "true" {
+				s.watchStream(w, r, ri.storePrefix+"/"+ns+"/")
 				return
 			}
 			s.listNamespaced(w, r, ri, ns)
@@ -280,8 +279,36 @@ func (s *Server) deleteNamespaced(w http.ResponseWriter, r *http.Request, ri res
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// stampCreationTimestamp sets metadata.creationTimestamp on obj if the key
-// doesn't already exist in the store (i.e. this is a create, not an update).
+func (s *Server) watchStream(w http.ResponseWriter, r *http.Request, prefix string) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := r.Context()
+	ch, err := s.store.Watch(ctx, prefix)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	for ev := range ch {
+		data, err := json.Marshal(ev)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+}
+
 func stampCreationTimestamp(_ context.Context, _ store.Store, _ string, obj json.RawMessage) json.RawMessage {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(obj, &m); err != nil {
@@ -295,7 +322,6 @@ func stampCreationTimestamp(_ context.Context, _ store.Store, _ string, obj json
 	if err := json.Unmarshal(meta, &metaMap); err != nil {
 		return obj
 	}
-	// Only set if not already present (first PUT = create).
 	if _, exists := metaMap["creationTimestamp"]; exists {
 		return obj
 	}
@@ -327,7 +353,6 @@ func isNotFound(err error) bool {
 	return err != nil && err.Error() == "store: not found"
 }
 
-// KindToPlural converts a resource Kind string to its plural URL segment.
 func KindToPlural(kind string) string {
 	for k, ri := range resources {
 		if k == kind {
@@ -337,7 +362,6 @@ func KindToPlural(kind string) string {
 	return strings.ToLower(kind) + "s"
 }
 
-// KindIsClusterScoped returns true if the kind is cluster-scoped.
 func KindIsClusterScoped(kind string) bool {
 	if ri, ok := resources[kind]; ok {
 		return ri.clusterScope

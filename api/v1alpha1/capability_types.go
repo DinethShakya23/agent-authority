@@ -14,10 +14,17 @@
 
 package v1alpha1
 
+const (
+	CapabilityPhaseReady   = "Ready"
+	CapabilityPhasePending = "Pending"
+	CapabilityPhaseInvalid = "Invalid"
+)
+
 type Capability struct {
 	TypeMeta   `json:",inline"`
 	ObjectMeta `json:"metadata"`
-	Spec       CapabilitySpec `json:"spec"`
+	Spec       CapabilitySpec   `json:"spec"`
+	Status     CapabilityStatus `json:"status,omitempty"`
 }
 
 type CapabilityList struct {
@@ -35,6 +42,11 @@ type CapabilitySpec struct {
 type CapabilityMeter struct {
 	Name         string `json:"name"`
 	JSONPath     string `json:"jsonPath,omitempty"`
-	Type         string `json:"type"` // "decimal" | "counter" | "distinct"
+	Type         string `json:"type"`
 	CurrencyPath string `json:"currencyPath,omitempty"`
+}
+
+type CapabilityStatus struct {
+	Phase     string `json:"phase,omitempty"`
+	Validated bool   `json:"validated,omitempty"`
 }

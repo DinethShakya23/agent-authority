@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Command agentd is the Agent Integrator control plane:
-// API server, controllers, WSO2 federation, policy engine,
-// passport authority, budget authority, CA client.
 package main
 
 import (
@@ -22,9 +19,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/thev1ndu/agent-integrator/internal/apiserver"
+	agentctrl "github.com/thev1ndu/agent-integrator/internal/controller/agent"
+	capctrl "github.com/thev1ndu/agent-integrator/internal/controller/capability"
+	integctrl "github.com/thev1ndu/agent-integrator/internal/controller/integration"
 	boltstore "github.com/thev1ndu/agent-integrator/pkg/store/bbolt"
 )
 
@@ -41,6 +43,9 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	dbPath := os.Getenv("AGENTD_DB_PATH")
 	if dbPath == "" {
 		dbPath = "/var/lib/agentd/state.db"
@@ -56,6 +61,22 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	go func() {
+		if err := agentctrl.New(st).Run(ctx); err != nil {
+			log.Printf("agent controller: %v", err)
+		}
+	}()
+	go func() {
+		if err := capctrl.New(st).Run(ctx); err != nil {
+			log.Printf("capability controller: %v", err)
+		}
+	}()
+	go func() {
+		if err := integctrl.New(st).Run(ctx); err != nil {
+			log.Printf("integration controller: %v", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -66,12 +87,21 @@ func run(cmd *cobra.Command, args []string) error {
 
 	addr := ":8443"
 	log.Printf("agentd listening on %s", addr)
-	return http.ListenAndServe(addr, mux)
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		srv.Close()
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 func main() {
-	_ = context.Background()
-
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
