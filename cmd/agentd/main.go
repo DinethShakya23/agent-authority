@@ -29,6 +29,8 @@ import (
 	capctrl "github.com/thev1ndu/agent-integrator/internal/controller/capability"
 	idsyncctrl "github.com/thev1ndu/agent-integrator/internal/controller/identitysync"
 	integctrl "github.com/thev1ndu/agent-integrator/internal/controller/integration"
+	policectrl "github.com/thev1ndu/agent-integrator/internal/controller/policy"
+	"github.com/thev1ndu/agent-integrator/pkg/authority"
 	"github.com/thev1ndu/agent-integrator/pkg/identity"
 	_ "github.com/thev1ndu/agent-integrator/pkg/identity/oidc"
 	boltstore "github.com/thev1ndu/agent-integrator/pkg/store/bbolt"
@@ -78,6 +80,13 @@ func run(cmd *cobra.Command, args []string) error {
 	go func() {
 		if err := integctrl.New(st).Run(ctx); err != nil {
 			log.Printf("integration controller: %v", err)
+		}
+	}()
+
+	engine := authority.NewEngine(st)
+	go func() {
+		if err := policectrl.New(st, engine).Run(ctx); err != nil {
+			log.Printf("policy controller: %v", err)
 		}
 	}()
 
