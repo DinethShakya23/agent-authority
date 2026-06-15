@@ -22,22 +22,13 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
 
-// Registry maps provider type names to their Factory functions.
-// Import an adapter package to register its Factory via init():
-//
-//	import _ "github.com/thev1ndu/agent-integrator/pkg/identity/wso2"
-//	import _ "github.com/thev1ndu/agent-integrator/pkg/identity/oidc"
 type Registry struct {
 	mu        sync.RWMutex
 	factories map[string]Factory
 }
 
-// DefaultRegistry is the process-wide provider registry.
 var DefaultRegistry = &Registry{factories: make(map[string]Factory)}
 
-// Register adds a Factory for the given provider type.
-// Panics on duplicate registration — this is a programming error, not a runtime
-// error, and should be caught immediately during development.
 func (r *Registry) Register(providerType string, f Factory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -47,8 +38,6 @@ func (r *Registry) Register(providerType string, f Factory) {
 	r.factories[providerType] = f
 }
 
-// Build instantiates a Federator for the provider type named in cfg.Type.
-// Returns an error when the type is unknown or the factory itself fails.
 func (r *Registry) Build(cfg ProviderConfig, s store.Store) (Federator, error) {
 	r.mu.RLock()
 	f, ok := r.factories[cfg.Type]
@@ -60,7 +49,6 @@ func (r *Registry) Build(cfg ProviderConfig, s store.Store) (Federator, error) {
 	return f(cfg, s)
 }
 
-// knownTypes returns a sorted list of registered provider type names.
 func (r *Registry) knownTypes() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -22,7 +22,7 @@
 //
 // Invariants:
 //
-//	I1: no synchronous control-plane or WSO2 call on the request path.
+//	I1: no synchronous control-plane or IdP call on the request path.
 //	I2: any verification failure → DENY (fail closed).
 package firewall
 

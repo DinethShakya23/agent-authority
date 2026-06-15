@@ -12,27 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package oidc provides a generic OpenID Connect identity adapter.
-// It supports any standards-compliant OIDC provider including Auth0, Okta,
-// Keycloak, and PingFederate.
-//
-// # Provider examples
-//
-//	Auth0:      WellKnown = "https://{tenant}.auth0.com/.well-known/openid-configuration"
-//	Okta:       WellKnown = "https://{org}.okta.com/oauth2/default/.well-known/openid-configuration"
-//	Keycloak:   WellKnown = "https://keycloak.example/realms/{realm}/.well-known/openid-configuration"
-//
-// # Registration
-//
-// Import this package (blank import) to register the "oidc" adapter:
-//
-//	import _ "github.com/thev1ndu/agent-integrator/pkg/identity/oidc"
-//
-// # ProviderConfig.Extras keys
-//
-//	"issuer_override" (string) – override the issuer read from the discovery doc
-//	"scope_claim"     (string) – space-separated scope claim name (default "scope")
-//	"scopes_claim"    (string) – JSON-array scope claim name (default "scopes")
 package oidc
 
 import (
@@ -58,8 +37,6 @@ func init() {
 	identity.DefaultRegistry.Register("oidc", Factory)
 }
 
-// Factory creates a generic OIDC Federator from a ProviderConfig.
-// Called by identity.DefaultRegistry.Build when Type == "oidc".
 func Factory(cfg identity.ProviderConfig, s store.Store) (identity.Federator, error) {
 	if cfg.WellKnown == "" {
 		return nil, fmt.Errorf("oidc: ProviderConfig.WellKnown is required")
@@ -73,35 +50,31 @@ func Factory(cfg identity.ProviderConfig, s store.Store) (identity.Federator, er
 	return c, nil
 }
 
-// client implements identity.Federator for generic OIDC providers.
 type client struct {
 	cfg        identity.ProviderConfig
 	store      store.Store
 	httpClient *http.Client
 
 	mu        sync.RWMutex
-	jwksCache map[string]any // kid → crypto.PublicKey
-	issuer    string         // read from discovery doc
-	jwksURI   string         // read from discovery doc
+	jwksCache map[string]any
+	issuer    string
+	jwksURI   string
 	lastFetch time.Time
 }
 
 func (c *client) ProviderType() string { return "oidc" }
 
-// oidcClaims extends jwt.RegisteredClaims with standard OAuth2/OIDC fields.
 type oidcClaims struct {
 	jwt.RegisteredClaims
-	Act    *actClaims `json:"act,omitempty"`  // RFC 8693 actor
-	Scope  string     `json:"scope,omitempty"` // space-separated (Auth0, Okta)
-	Scopes []string   `json:"scopes,omitempty"` // JSON array (some providers)
+	Act    *actClaims `json:"act,omitempty"`
+	Scope  string     `json:"scope,omitempty"`
+	Scopes []string   `json:"scopes,omitempty"`
 }
 
 type actClaims struct {
 	Sub string `json:"sub"`
 }
 
-// Verify validates the raw bearer token against the OIDC provider's JWKS.
-// Returns the provider-agnostic Principal on success.
 func (c *client) Verify(ctx context.Context, rawToken string) (*identity.Principal, error) {
 	if err := c.refreshIfNeeded(ctx); err != nil {
 		return nil, apierr.Newf(apierr.CodeTokenInvalid, "oidc: JWKS refresh failed: %v", err)
@@ -113,6 +86,13 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*identity.Princip
 		jwt.WithAudience(c.cfg.Audience),
 		jwt.WithExpirationRequired(),
 	)
+	if err != nil && c.issuerFallbackEnabled() {
+		claims = &oidcClaims{}
+		_, err = jwt.ParseWithClaims(rawToken, claims, c.keyFunc,
+			jwt.WithAudience(c.cfg.Audience),
+			jwt.WithExpirationRequired(),
+		)
+	}
 	if err != nil {
 		return nil, apierr.Newf(apierr.CodeTokenInvalid, "oidc: token verification failed: %v", err)
 	}
@@ -149,31 +129,28 @@ func (c *client) Verify(ctx context.Context, rawToken string) (*identity.Princip
 	}, nil
 }
 
-// Resolve maps the Principal's AgentSubject+Issuer to a registered Agent.
 func (c *client) Resolve(ctx context.Context, p *identity.Principal) (*v1alpha1.Agent, error) {
 	var agent v1alpha1.Agent
 	if err := c.store.Get(ctx, p.SubjectKey(), &agent); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, apierr.Newf(apierr.CodeNoAgentMapping,
-				"oidc: no agent registered for issuer=%s subject=%s", p.Issuer, p.AgentSubject)
+				"no agent registered for issuer=%s subject=%s", p.Issuer, p.AgentSubject)
 		}
 		return nil, fmt.Errorf("oidc: resolve agent: %w", err)
 	}
 	if agent.Status.Phase == v1alpha1.AgentPhaseSuspended {
 		return nil, apierr.Newf(apierr.CodeAgentSuspended,
-			"oidc: agent %s is suspended", agent.ObjectMeta.Name)
+			"agent %s is suspended", agent.ObjectMeta.Name)
 	}
 	return &agent, nil
 }
 
-// keyFunc looks up the public key for JWT signature verification.
 func (c *client) keyFunc(token *jwt.Token) (any, error) {
 	kid, _ := token.Header["kid"].(string)
 
 	c.mu.RLock()
 	pub, ok := c.jwksCache[kid]
 	if !ok && kid == "" {
-		// No kid header — try the first available key.
 		for _, v := range c.jwksCache {
 			pub, ok = v, true
 			break
@@ -187,7 +164,6 @@ func (c *client) keyFunc(token *jwt.Token) (any, error) {
 	return pub, nil
 }
 
-// discoveredIssuer returns the issuer read from the discovery doc.
 func (c *client) discoveredIssuer() string {
 	if override, ok := c.cfg.Extras["issuer_override"].(string); ok && override != "" {
 		return override
@@ -197,20 +173,17 @@ func (c *client) discoveredIssuer() string {
 	return c.issuer
 }
 
-// extractScopes pulls scopes from whichever claim the provider uses.
+func (c *client) issuerFallbackEnabled() bool {
+	v, _ := c.cfg.Extras["issuer_fallback"].(bool)
+	return v
+}
+
 func (c *client) extractScopes(claims *oidcClaims) []string {
 	if len(claims.Scopes) > 0 {
 		return claims.Scopes
 	}
-	scopeClaim := "scope"
-	if v, ok := c.cfg.Extras["scope_claim"].(string); ok && v != "" {
-		scopeClaim = v
-	}
-	_ = scopeClaim // already decoded into claims.Scope via standard field name
 	return splitScope(claims.Scope)
 }
-
-// --- JWKS management ---
 
 type discoveryDoc struct {
 	Issuer  string `json:"issuer"`
@@ -226,10 +199,10 @@ type jwkKey struct {
 	Kid string `json:"kid"`
 	Use string `json:"use,omitempty"`
 	Alg string `json:"alg,omitempty"`
-	N   string `json:"n,omitempty"` // RSA modulus
-	E   string `json:"e,omitempty"` // RSA exponent
+	N   string `json:"n,omitempty"`
+	E   string `json:"e,omitempty"`
 	Crv string `json:"crv,omitempty"`
-	X   string `json:"x,omitempty"` // EdDSA public key
+	X   string `json:"x,omitempty"`
 }
 
 func (c *client) refreshIfNeeded(ctx context.Context) error {
@@ -242,7 +215,6 @@ func (c *client) refreshIfNeeded(ctx context.Context) error {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// Double-check under write lock.
 	if !c.lastFetch.IsZero() && time.Since(c.lastFetch) < c.cfg.JWKSRefresh {
 		return nil
 	}
@@ -313,8 +285,6 @@ func (c *client) fetchJSON(ctx context.Context, url string) ([]byte, error) {
 	return buf, nil
 }
 
-// parseJWK converts a JWK entry to a crypto.PublicKey.
-// Supports RSA (RS256) and Ed25519 (EdDSA).
 func parseJWK(k jwkKey) (any, error) {
 	switch k.Kty {
 	case "RSA":

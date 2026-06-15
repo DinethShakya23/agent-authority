@@ -30,7 +30,7 @@ type Code string
 const (
 	CodeOK Code = "AI-0000"
 
-	// WSO2 identity AI-11xx
+	// Identity AI-11xx
 	CodeNoAgentMapping  Code = "AI-1101"
 	CodeIssuerNotAllowed Code = "AI-1102"
 	CodeTokenInvalid    Code = "AI-1103"

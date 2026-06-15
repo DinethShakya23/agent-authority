@@ -21,12 +21,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/thev1ndu/agent-integrator/internal/apiserver"
 	agentctrl "github.com/thev1ndu/agent-integrator/internal/controller/agent"
 	capctrl "github.com/thev1ndu/agent-integrator/internal/controller/capability"
+	idsyncctrl "github.com/thev1ndu/agent-integrator/internal/controller/identitysync"
 	integctrl "github.com/thev1ndu/agent-integrator/internal/controller/integration"
+	"github.com/thev1ndu/agent-integrator/pkg/identity"
+	_ "github.com/thev1ndu/agent-integrator/pkg/identity/oidc"
 	boltstore "github.com/thev1ndu/agent-integrator/pkg/store/bbolt"
 )
 
@@ -77,6 +81,26 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	providerCfg := loadProviderConfig()
+	var fed identity.Federator
+	if providerCfg.WellKnown != "" {
+		fed, err = identity.DefaultRegistry.Build(providerCfg, st)
+		if err != nil {
+			return err
+		}
+
+		scimCfg := loadSCIM2Config()
+		if scimCfg.Enabled {
+			syncer := identity.NewSCIMSync(providerCfg.Type, providerCfg.WellKnown, scimCfg, st)
+			go func() {
+				if err := idsyncctrl.New(syncer, scimCfg.SyncInterval).Run(ctx); err != nil {
+					log.Printf("identitysync controller: %v", err)
+				}
+			}()
+		}
+		log.Printf("agentd: identity federation enabled (type=%s issuer=%s)", providerCfg.Type, providerCfg.WellKnown)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -84,6 +108,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	apiSrv := apiserver.New(st)
 	mux.Handle("/apis/", apiSrv.Handler())
+
+	if fed != nil {
+		mux.HandleFunc("/apis/agentintegrator.dev/v1alpha1/whoami", apiserver.WhoamiHandler(fed))
+	}
 
 	addr := ":8443"
 	log.Printf("agentd listening on %s", addr)
@@ -99,6 +127,63 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return nil
+}
+
+func loadProviderConfig() identity.ProviderConfig {
+	wellKnown := os.Getenv("IDP_WELL_KNOWN")
+	if wellKnown == "" {
+		return identity.ProviderConfig{}
+	}
+
+	providerType := os.Getenv("IDP_TYPE")
+	if providerType == "" {
+		providerType = "oidc"
+	}
+
+	refresh := 5 * time.Minute
+	if v := os.Getenv("IDP_JWKS_REFRESH"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			refresh = d
+		}
+	}
+
+	obo := os.Getenv("IDP_ACCEPT_OBO") == "true" || os.Getenv("IDP_ACCEPT_OBO") == "1"
+
+	extras := map[string]any{}
+	if v := os.Getenv("IDP_ISSUER_OVERRIDE"); v != "" {
+		extras["issuer_override"] = v
+	}
+	if os.Getenv("IDP_ISSUER_FALLBACK") == "true" || os.Getenv("IDP_ISSUER_FALLBACK") == "1" {
+		extras["issuer_fallback"] = true
+	}
+
+	return identity.ProviderConfig{
+		Type:             providerType,
+		WellKnown:        wellKnown,
+		Audience:         os.Getenv("IDP_AUDIENCE"),
+		JWKSRefresh:      refresh,
+		AcceptOnBehalfOf: obo,
+		Extras:           extras,
+	}
+}
+
+func loadSCIM2Config() identity.SCIM2Config {
+	enabled := os.Getenv("SCIM2_ENABLED") == "true" || os.Getenv("SCIM2_ENABLED") == "1"
+
+	interval := 5 * time.Minute
+	if v := os.Getenv("SCIM2_SYNC_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			interval = d
+		}
+	}
+
+	return identity.SCIM2Config{
+		Enabled:         enabled,
+		Endpoint:        os.Getenv("SCIM2_ENDPOINT"),
+		CredentialsRef:  os.Getenv("SCIM2_CREDENTIALS_REF"),
+		SyncInterval:    interval,
+		RoleLabelPrefix: os.Getenv("SCIM2_ROLE_LABEL_PREFIX"),
+	}
 }
 
 func main() {

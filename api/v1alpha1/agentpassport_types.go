@@ -48,7 +48,7 @@ type AgentPassportSpec struct {
 
 type PassportAgent struct {
 	ID          string `json:"id"`
-	WSO2Subject string `json:"wso2Subject,omitempty"`
+	Subject     string `json:"subject,omitempty"`
 	OnBehalfOf  string `json:"onBehalfOf,omitempty"`
 }
 

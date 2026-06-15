@@ -18,7 +18,7 @@
 //   - perRequest → stateless predicates evaluated by Cedar
 //   - budget     → stateful accumulators owned by pkg/budget
 //
-// A WSO2 scope is an INPUT to policy derivation, never a grant by itself.
+// An IdP scope is an INPUT to policy derivation, never a grant by itself.
 // Both the scope AND a matching AgentPolicy rule are required (§8.3, requiredScopes).
 package authority
 

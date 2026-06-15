@@ -64,7 +64,6 @@ type AgentStatus struct {
 }
 
 // ProviderSyncStatus records the last synchronisation from the identity provider.
-// Populated only when ManagedBy is set (e.g. the SCIM2 sync for WSO2).
 type ProviderSyncStatus struct {
 	LastSyncedAt time.Time `json:"lastSyncedAt,omitempty"`
 	Roles        []string  `json:"roles,omitempty"`

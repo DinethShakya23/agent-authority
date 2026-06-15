@@ -15,7 +15,7 @@
 // Command agentfw is the Agent Integrator data plane: the Agent Firewall.
 // It verifies, evaluates, meters, decides, forwards, and emits receipts.
 //
-// Invariant: no synchronous control-plane or WSO2 call on the request path.
+// Invariant: no synchronous control-plane or IdP call on the request path.
 package main
 
 import (

@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Command agentctl is the operator and developer CLI.
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -142,7 +144,6 @@ func runGet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// normaliseKind converts plural/lowercase inputs to canonical Kind strings.
 func normaliseKind(s string) string {
 	switch strings.ToLower(strings.TrimRight(s, "s")) {
 	case "agent":
@@ -164,7 +165,6 @@ func normaliseKind(s string) string {
 	return s
 }
 
-// printTable prints a fixed-width table of resources.
 func printTable(items []map[string]json.RawMessage) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "NAME\tNAMESPACE\tPHASE\tAGE")
@@ -178,7 +178,6 @@ func printTable(items []map[string]json.RawMessage) {
 	w.Flush()
 }
 
-// jsonStr extracts a nested string field via successive keys.
 func jsonStr(m map[string]json.RawMessage, keys ...string) string {
 	if len(keys) == 0 {
 		return ""
@@ -199,7 +198,6 @@ func jsonStr(m map[string]json.RawMessage, keys ...string) string {
 	return jsonStr(nested, keys[1:]...)
 }
 
-// jsonStrStatus extracts .status.phase from a resource map.
 func jsonStrStatus(m map[string]json.RawMessage) string {
 	raw, ok := m["status"]
 	if !ok {
@@ -218,7 +216,6 @@ func jsonStrStatus(m map[string]json.RawMessage) string {
 	return phase
 }
 
-// jsonAge extracts a creation timestamp and returns a human-readable age.
 func jsonAge(m map[string]json.RawMessage) string {
 	raw, ok := m["metadata"]
 	if !ok {
@@ -249,6 +246,79 @@ func jsonAge(m map[string]json.RawMessage) string {
 	}
 }
 
+var whoamiToken string
+
+var whoamiCmd = &cobra.Command{
+	Use:   "whoami",
+	Short: "Resolve a bearer token to an agent and human principal",
+	RunE:  runWhoami,
+}
+
+func runWhoami(cmd *cobra.Command, args []string) error {
+	token := whoamiToken
+	if token == "" {
+		token = os.Getenv("IDP_TOKEN")
+	}
+	if token == "" {
+		return fmt.Errorf("provide a token via --token or IDP_TOKEN env var")
+	}
+
+	body, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		return err
+	}
+
+	url := serverAddr + "/apis/agentintegrator.dev/v1alpha1/whoami"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("whoami: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("whoami: read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("whoami: %s: %s", resp.Status, string(respBody))
+	}
+
+	var result struct {
+		Agent     string   `json:"agent"`
+		Namespace string   `json:"namespace"`
+		Human     string   `json:"human,omitempty"`
+		Issuer    string   `json:"issuer"`
+		Provider  string   `json:"provider"`
+		Scopes    []string `json:"scopes,omitempty"`
+		Phase     string   `json:"phase"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return fmt.Errorf("whoami: decode: %w", err)
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "AGENT\t%s\n", result.Agent)
+	fmt.Fprintf(w, "NAMESPACE\t%s\n", result.Namespace)
+	fmt.Fprintf(w, "PHASE\t%s\n", result.Phase)
+	fmt.Fprintf(w, "PROVIDER\t%s\n", result.Provider)
+	fmt.Fprintf(w, "ISSUER\t%s\n", result.Issuer)
+	if result.Human != "" {
+		fmt.Fprintf(w, "HUMAN\t%s\n", result.Human)
+	}
+	if len(result.Scopes) > 0 {
+		fmt.Fprintf(w, "SCOPES\t%s\n", strings.Join(result.Scopes, ", "))
+	}
+	w.Flush()
+	return nil
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "http://localhost:8443", "agentd API server address")
 
@@ -256,9 +326,12 @@ func init() {
 	getCmd.Flags().StringVarP(&getNamespace, "namespace", "n", "default", "namespace to query")
 	getCmd.Flags().BoolVarP(&getAllNs, "all-namespaces", "A", false, "list across all namespaces")
 
+	whoamiCmd.Flags().StringVar(&whoamiToken, "token", "", "bearer token to resolve")
+
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(applyCmd)
 	rootCmd.AddCommand(getCmd)
+	rootCmd.AddCommand(whoamiCmd)
 }
 
 func main() {
