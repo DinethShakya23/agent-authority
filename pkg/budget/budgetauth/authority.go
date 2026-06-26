@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package budgetauth is the control-plane implementation of budget.Authority.
-//
-// SAFETY PROPERTY: grants are deducted from Budget.Remaining BEFORE the lease
-// is returned. This pre-deduction ordering makes overspend (S > B) impossible.
-// Do not reorder the deduct-then-write-then-return sequence.
-//
-// Key layout (_.md §16):
-//
-//	budgets/{execID}
-//	leases/{execID}/{leaseID}
-//	epochs/{execID}
 package budgetauth
 
 import (
@@ -31,6 +20,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -39,21 +29,106 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
 
-// Config tunes the budget authority behaviour.
 type Config struct {
-	MaxLeaseFraction float64       // e.g. 0.25 — max fraction of a limit per lease
-	LeaseTTL         time.Duration // e.g. 30s
-	SweepInterval    time.Duration // e.g. 5s
+	MaxLeaseFraction float64
+	LeaseTTL         time.Duration
+	SweepInterval    time.Duration
 }
 
-type authority struct {
+type Authority struct {
 	store  store.Store
 	config Config
 }
 
-// New creates a new budget Authority backed by the given store.
-func New(s store.Store, cfg Config) budget.Authority {
-	return &authority{store: s, config: cfg}
+func New(s store.Store, cfg Config) *Authority {
+	return &Authority{store: s, config: cfg}
+}
+
+func (a *Authority) Run(ctx context.Context) error {
+	ticker := time.NewTicker(a.config.SweepInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if err := a.sweep(ctx); err != nil {
+				log.Printf("budget sweeper: %v", err)
+			}
+		}
+	}
+}
+
+func (a *Authority) sweep(ctx context.Context) error {
+	var allLeases []budget.Lease
+	if err := a.store.List(ctx, "leases/", &allLeases); err != nil {
+		return fmt.Errorf("list leases: %w", err)
+	}
+
+	now := time.Now().UTC()
+	for _, l := range allLeases {
+		if l.ExpiresAt.After(now) {
+			continue
+		}
+		if err := a.reclaimLease(ctx, l); err != nil {
+			log.Printf("budget sweeper: reclaim lease %s: %v", l.ID, err)
+		}
+	}
+	return nil
+}
+
+func (a *Authority) reclaimLease(ctx context.Context, expired budget.Lease) error {
+	return a.store.Txn(ctx, func(tx store.Tx) error {
+		var current budget.Lease
+		if err := tx.Get(leaseKey(expired.ExecutionID, expired.ID), &current); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		if current.ExpiresAt.After(time.Now().UTC()) {
+			return nil
+		}
+
+		var b budget.Budget
+		if err := tx.Get(budgetKey(expired.ExecutionID), &b); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return tx.Delete(leaseKey(expired.ExecutionID, expired.ID))
+			}
+			return err
+		}
+
+		newRemaining := make(budget.Meters, len(b.Remaining))
+		for k, v := range b.Remaining {
+			newRemaining[k] = v
+		}
+
+		for m, grantedStr := range current.Granted {
+			granted, err := parseFloat(grantedStr)
+			if err != nil {
+				continue
+			}
+			consumedVal := 0.0
+			if consumedStr, ok := current.Consumed[m]; ok {
+				consumedVal, _ = parseFloat(consumedStr)
+			}
+			credit := granted - consumedVal
+			if credit < 0 {
+				credit = 0
+			}
+			cur, _ := parseFloat(b.Remaining[m])
+			newRemaining[m] = formatFloat(cur + credit)
+		}
+
+		b.Remaining = newRemaining
+		if err := tx.Put(budgetKey(expired.ExecutionID), &b); err != nil {
+			return err
+		}
+
+		return tx.Delete(leaseKey(expired.ExecutionID, expired.ID))
+	})
 }
 
 func budgetKey(execID string) string { return fmt.Sprintf("budgets/%s", execID) }
@@ -92,9 +167,7 @@ func minFloat3(a, b, c float64) float64 {
 	return m
 }
 
-// CreateBudget initialises a budget for a new execution.
-// All meters are set to their limits; remaining = limits, leased = zero.
-func (a *authority) CreateBudget(ctx context.Context, executionID string, limits budget.Meters) (*budget.Budget, error) {
+func (a *Authority) CreateBudget(ctx context.Context, executionID string, limits budget.Meters) (*budget.Budget, error) {
 	remaining := make(budget.Meters, len(limits))
 	leased := make(budget.Meters, len(limits))
 	for k, v := range limits {
@@ -114,10 +187,7 @@ func (a *authority) CreateBudget(ctx context.Context, executionID string, limits
 	return b, nil
 }
 
-// AcquireLease atomically deducts a grant from Budget.Remaining and returns a
-// pre-deducted Lease. The deduction happens inside a Txn, BEFORE the lease is
-// returned — this is the invariant that keeps S ≤ B.
-func (a *authority) AcquireLease(ctx context.Context, req budget.LeaseRequest) (*budget.Lease, error) {
+func (a *Authority) AcquireLease(ctx context.Context, req budget.LeaseRequest) (*budget.Lease, error) {
 	var lease *budget.Lease
 
 	err := a.store.Txn(ctx, func(tx store.Tx) error {
@@ -174,7 +244,6 @@ func (a *authority) AcquireLease(ctx context.Context, req budget.LeaseRequest) (
 			newRemaining[m] = formatFloat(remaining - grant)
 		}
 
-		// Write updated budget with new Remaining (BEFORE returning lease).
 		b.Remaining = newRemaining
 		if err := tx.Put(budgetKey(req.ExecutionID), &b); err != nil {
 			return fmt.Errorf("budgetauth: write budget: %w", err)
@@ -213,13 +282,10 @@ func (a *authority) AcquireLease(ctx context.Context, req budget.LeaseRequest) (
 	return lease, nil
 }
 
-// RenewLease extends the lease TTL and optionally tops up the granted amount.
-func (a *authority) RenewLease(ctx context.Context, leaseID string, hint budget.Meters) (*budget.Lease, error) {
+func (a *Authority) RenewLease(ctx context.Context, leaseID string, hint budget.Meters) (*budget.Lease, error) {
 	var updated *budget.Lease
 
 	err := a.store.Txn(ctx, func(tx store.Tx) error {
-		// Scan strategy: List all under "leases/" and find by ID.
-		// This is acceptable for v0.1 (control plane, not hot path).
 		var found budget.Lease
 		var foundExecID string
 
@@ -295,9 +361,7 @@ func (a *authority) RenewLease(ctx context.Context, leaseID string, hint budget.
 	return updated, nil
 }
 
-// ReleaseLease credits back (Granted − Consumed) to Budget.Remaining and deletes
-// the lease. Idempotent: if the lease is not found, this is a no-op.
-func (a *authority) ReleaseLease(ctx context.Context, leaseID string, consumed budget.Meters) error {
+func (a *Authority) ReleaseLease(ctx context.Context, leaseID string, consumed budget.Meters) error {
 	return a.store.Txn(ctx, func(tx store.Tx) error {
 		var rawLeases []budget.Lease
 		if err := tx.List("leases/", &rawLeases); err != nil {
@@ -328,7 +392,6 @@ func (a *authority) ReleaseLease(ctx context.Context, leaseID string, consumed b
 			newRemaining[k] = v
 		}
 
-		// Credit = Granted − actual consumed (caller-reported).
 		for m, grantedStr := range found.Granted {
 			granted, err := parseFloat(grantedStr)
 			if err != nil {
@@ -355,9 +418,7 @@ func (a *authority) ReleaseLease(ctx context.Context, leaseID string, consumed b
 	})
 }
 
-// BumpEpoch atomically increments Budget.Epoch. Outstanding leases with the
-// old epoch will fail their epoch check on the next operation.
-func (a *authority) BumpEpoch(ctx context.Context, executionID string) (uint64, error) {
+func (a *Authority) BumpEpoch(ctx context.Context, executionID string) (uint64, error) {
 	var newEpoch uint64
 
 	err := a.store.Txn(ctx, func(tx store.Tx) error {
@@ -375,8 +436,7 @@ func (a *authority) BumpEpoch(ctx context.Context, executionID string) (uint64, 
 	return newEpoch, nil
 }
 
-// Get returns the current budget status (read-only).
-func (a *authority) Get(ctx context.Context, executionID string) (*budget.Budget, error) {
+func (a *Authority) Get(ctx context.Context, executionID string) (*budget.Budget, error) {
 	var b budget.Budget
 	if err := a.store.Get(ctx, budgetKey(executionID), &b); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
