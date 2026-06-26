@@ -63,7 +63,6 @@ type AgentStatus struct {
 	ActivePassports  int                `json:"activePassports,omitempty"`
 }
 
-// ProviderSyncStatus records the last synchronisation from the identity provider.
 type ProviderSyncStatus struct {
 	LastSyncedAt time.Time `json:"lastSyncedAt,omitempty"`
 	Roles        []string  `json:"roles,omitempty"`

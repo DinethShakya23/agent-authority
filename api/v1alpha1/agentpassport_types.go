@@ -64,7 +64,7 @@ type PassportAuthority struct {
 }
 
 type PassportConfirmation struct {
-	X5tS256 string `json:"x5tS256"` // SHA-256 thumbprint of the agent leaf cert
+	X5tS256 string `json:"x5tS256"`
 }
 
 type PassportDelegation struct {
@@ -80,5 +80,5 @@ type PassportPolicy struct {
 
 type AgentPassportStatus struct {
 	Phase string `json:"phase,omitempty"`
-	JWS   string `json:"jws,omitempty"` // compact JWS serialisation
+	JWS   string `json:"jws,omitempty"`
 }

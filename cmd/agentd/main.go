@@ -29,6 +29,7 @@ import (
 	capctrl "github.com/thev1ndu/agent-integrator/internal/controller/capability"
 	idsyncctrl "github.com/thev1ndu/agent-integrator/internal/controller/identitysync"
 	integctrl "github.com/thev1ndu/agent-integrator/internal/controller/integration"
+	passportctrl "github.com/thev1ndu/agent-integrator/internal/controller/passport"
 	policectrl "github.com/thev1ndu/agent-integrator/internal/controller/policy"
 	"github.com/thev1ndu/agent-integrator/pkg/authority"
 	"github.com/thev1ndu/agent-integrator/pkg/budget/budgetauth"
@@ -81,6 +82,11 @@ func run(cmd *cobra.Command, args []string) error {
 	go func() {
 		if err := integctrl.New(st).Run(ctx); err != nil {
 			log.Printf("integration controller: %v", err)
+		}
+	}()
+	go func() {
+		if err := passportctrl.New(st).Run(ctx); err != nil {
+			log.Printf("passport controller: %v", err)
 		}
 	}()
 
