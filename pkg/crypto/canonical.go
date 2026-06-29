@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package crypto implements AIP-1 canonicalisation and Ed25519 sign/verify.
-//
-// The firewall reconstructs the canonical string from what it received and
-// NEVER trusts a client-supplied canonical string.
-//
-// Canonical string format (§9.2 of the AIP-1 spec):
-// Length-prefixed fields, newline-separated. LP(s) = decimal byte length + ":" + UTF-8 bytes.
-// Order: spec, execution_id, passport_id, method, audience, path, timestamp, nonce, payload_sha256_hex
 package crypto
 
 import (
@@ -31,20 +23,18 @@ import (
 	"strings"
 )
 
-// SpecVersion is the AIP-1 version string that appears as the first field.
 const SpecVersion = "AIP-1/v0.1"
 
-// CanonicalRequest holds the fields needed to build the AIP-1 canonical string.
 type CanonicalRequest struct {
-	Spec        string // always "AIP-1/v0.1"
+	Spec        string
 	ExecutionID string
 	PassportID  string
-	Method      string // HTTP method, upper-case
-	Audience    string // integration audience URI
-	Path        string // request path (query params sorted by key then value)
-	Timestamp   string // RFC 3339 UTC, millisecond precision
-	Nonce       string // 128-bit random, base64url (22 chars)
-	PayloadHash string // hex-encoded SHA-256 of exact request body bytes
+	Method      string
+	Audience    string
+	Path        string
+	Timestamp   string
+	Nonce       string
+	PayloadHash string
 }
 
 func lp(s string) string {
@@ -52,9 +42,6 @@ func lp(s string) string {
 	return fmt.Sprintf("%d:%s", len(b), s)
 }
 
-// Canonical builds the AIP-1 canonical string for signing.
-// The firewall calls this independently from received headers — never from
-// a client-supplied value.
 func Canonical(r CanonicalRequest) []byte {
 	fields := []string{
 		r.Spec,
@@ -70,8 +57,6 @@ func Canonical(r CanonicalRequest) []byte {
 	return []byte(strings.Join(fields, "\n"))
 }
 
-// PayloadSHA256Hex returns the hex-encoded SHA-256 of body.
-// Empty body → SHA-256 of the empty string (not nil-specific).
 func PayloadSHA256Hex(body []byte) string {
 	if body == nil {
 		body = []byte{}
@@ -80,23 +65,19 @@ func PayloadSHA256Hex(body []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Canonicalizer builds canonical strings.
 type Canonicalizer interface {
 	Canonical(r CanonicalRequest) ([]byte, error)
 }
 
-// Signer signs messages with an Ed25519 private key.
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
 	PublicKey() crypto.PublicKey
 }
 
-// SigVerifier verifies Ed25519 signatures.
 type SigVerifier interface {
 	Verify(pub crypto.PublicKey, msg, sig []byte) error
 }
 
-// Ed25519Verifier implements SigVerifier using stdlib Ed25519.
 type Ed25519Verifier struct{}
 
 func (Ed25519Verifier) Verify(pub crypto.PublicKey, msg, sig []byte) error {
@@ -110,7 +91,6 @@ func (Ed25519Verifier) Verify(pub crypto.PublicKey, msg, sig []byte) error {
 	return nil
 }
 
-// Ed25519Signer implements Signer using an in-memory private key.
 type Ed25519Signer struct {
 	priv ed25519.PrivateKey
 }

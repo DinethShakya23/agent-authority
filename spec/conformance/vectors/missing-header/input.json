@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "path": "/api/v1/orders",
+  "headers": {
+    "AI-Execution": "exec-001",
+    "AI-Timestamp": "2026-08-15T12:00:00.000Z",
+    "AI-Nonce": "dGVzdG5vbmNlYmFzZTY0dQ"
+  },
+  "body": "{}"
+}
