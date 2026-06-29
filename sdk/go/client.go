@@ -18,12 +18,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -92,7 +92,7 @@ func (c *Client) Post(ctx context.Context, path string, body []byte) (*http.Resp
 	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
 	nonce := generateNonce()
 
-	canonical, signature, err := c.Sign("POST", path, timestamp, nonce, body)
+	_, signature, err := c.Sign("POST", path, timestamp, nonce, body)
 	if err != nil {
 		return nil, fmt.Errorf("agentsdk: sign: %w", err)
 	}
@@ -101,8 +101,6 @@ func (c *Client) Post(ctx context.Context, path string, body []byte) (*http.Resp
 	if err != nil {
 		return nil, fmt.Errorf("agentsdk: new request: %w", err)
 	}
-
-	_ = canonical
 
 	certB64 := ""
 	if c.cfg.Certificate != nil {
