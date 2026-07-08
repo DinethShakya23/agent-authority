@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Command agentfw is the Agent Integrator data plane: the Agent Firewall.
-// It verifies, evaluates, meters, decides, forwards, and emits receipts.
-//
-// Invariant: no synchronous control-plane or IdP call on the request path.
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/thev1ndu/agent-integrator/pkg/delegation"
+	"github.com/thev1ndu/agent-integrator/pkg/firewall"
+	"github.com/thev1ndu/agent-integrator/pkg/firewall/stages"
+	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
 var rootCmd = &cobra.Command{
@@ -32,15 +35,72 @@ var rootCmd = &cobra.Command{
 	RunE:  run,
 }
 
+type noopRevocationChecker struct{}
+
+func (noopRevocationChecker) IsRevoked(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
+func (noopRevocationChecker) CurrentEpoch(_ context.Context, _ string) (uint64, error) {
+	return 0, nil
+}
+
 func run(cmd *cobra.Command, args []string) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	audience := os.Getenv("AGENTFW_AUDIENCE")
+	if audience == "" {
+		audience = "https://localhost:8443"
+	}
+	upstreamURL := os.Getenv("AGENTFW_UPSTREAM")
+	if upstreamURL == "" {
+		upstreamURL = "http://localhost:9090"
+	}
+
+	adapter := integration.NewHTTPAdapter(audience, upstreamURL)
+	nonceCache := stages.NewNonceCache(0)
+
+	stageList := []firewall.Stage{
+		stages.NewHeaders(),
+		stages.NewCertificate(nil),
+		stages.NewPassport(nil, nil),
+		stages.NewBinding(),
+		stages.NewValidity(),
+		stages.NewRevocation(noopRevocationChecker{}),
+		stages.NewTimestamp(),
+		stages.NewNonce(nonceCache),
+		stages.NewSignature(nil),
+		stages.NewAudience(),
+		stages.NewCapability("", ""),
+		stages.NewSchema(nil, ""),
+		stages.NewConstraints(nil),
+		stages.NewDelegation(nil, delegation.DefaultVerifier{}, 8),
+	}
+
+	pipeline := firewall.NewRunner(stageList, adapter)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		pipeline.Handle(r.Context(), w, r)
+	})
 
 	addr := ":8080"
 	log.Printf("agentfw listening on %s", addr)
-	return http.ListenAndServe(addr, mux)
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	go func() {
+		<-ctx.Done()
+		srv.Close()
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 func main() {

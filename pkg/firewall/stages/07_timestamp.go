@@ -24,10 +24,8 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// timestampWindow is the maximum age (or future skew) for AI-Timestamp (§9.4 step 7).
 const timestampWindow = 30 * time.Second
 
-// Timestamp checks that |now - AI-Timestamp| <= 30s (step 7 of §9.4).
 type Timestamp struct{}
 
 func NewTimestamp() *Timestamp { return &Timestamp{} }

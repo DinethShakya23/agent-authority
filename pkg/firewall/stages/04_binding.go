@@ -24,9 +24,6 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// Binding verifies that the SHA-256 thumbprint of the leaf certificate matches
-// passport.confirmation.x5tS256 (step 4 of §9.4).
-// This cryptographically binds the certificate to the passport.
 type Binding struct{}
 
 func NewBinding() *Binding { return &Binding{} }

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package delegation verifies monotonic attenuation of Agent Passport chains.
-//
-// A child's authority is a strict subset of its parent's on EVERY dimension.
-// Budget is drawn FROM the parent, never added to.
-// Violation of any of the 7 monotonicity rules → DENY AI-7001.
 package delegation
 
 import (
@@ -26,19 +21,12 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/apierr"
 )
 
-// ChainVerifier checks a delegation chain for monotonic attenuation.
 type ChainVerifier interface {
-	// Verify checks that the chain is valid and that leaf is the terminal passport.
-	// chain[0] must have no parent. Each link's authority must be a subset of the
-	// prior link's. All epochs must be current.
-	// maxDepth comes from the policy (AgentPolicy.spec.rules[].delegation.maxDepth).
 	Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.AgentPassport, maxDepth int) error
 }
 
-// DefaultVerifier implements ChainVerifier.
 type DefaultVerifier struct{}
 
-// Verify implements ChainVerifier.
 func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.AgentPassport, maxDepth int) error {
 	if len(chain) == 0 {
 		return apierr.New(apierr.CodeBrokenChain, "delegation chain is empty")
@@ -47,7 +35,6 @@ func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.Ag
 	if last.Spec.PassportID != leaf.Spec.PassportID {
 		return apierr.New(apierr.CodeBrokenChain, "leaf passport does not match end of chain")
 	}
-	// Rule 7: depth
 	depth := len(chain) - 1
 	if depth > maxDepth {
 		return apierr.Newf(apierr.CodeDepthExceeded, "depth %d exceeds maxDepth %d", depth, maxDepth)
@@ -75,26 +62,21 @@ func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.Ag
 	return nil
 }
 
-// checkMonotonicity enforces the 6 field-level monotonicity rules (depth is rule 7, checked above).
 func checkMonotonicity(parent, child *v1alpha1.AgentPassport) error {
 	pa := parent.Spec.Authority
 	ca := child.Spec.Authority
 
-	// Rule 1: capabilities subset.
 	if err := checkSubset("capabilities", toSet(pa.Capabilities), toSet(ca.Capabilities)); err != nil {
 		return err
 	}
-	// Rule 2: audience subset.
 	if err := checkSubset("audience", toSet(parent.Spec.Audience), toSet(child.Spec.Audience)); err != nil {
 		return err
 	}
-	// Rule 3: resources subset.
 	parentRes := resourceTypeSet(pa.Resources)
 	childRes := resourceTypeSet(ca.Resources)
 	if err := checkSubset("resources", parentRes, childRes); err != nil {
 		return err
 	}
-	// Rule 4: per-request constraints at least as tight (child maximum ≤ parent maximum).
 	for field, childC := range ca.PerRequest {
 		parentC, ok := pa.PerRequest[field]
 		if !ok {
@@ -108,8 +90,6 @@ func checkMonotonicity(parent, child *v1alpha1.AgentPassport) error {
 			}
 		}
 	}
-	// Rule 5: budget not greater — validated at minting time by the control plane.
-	// Rule 6: expiresAt ≤ parent.expiresAt.
 	if !child.Spec.Validity.ExpiresAt.IsZero() && !parent.Spec.Validity.ExpiresAt.IsZero() {
 		if child.Spec.Validity.ExpiresAt.After(parent.Spec.Validity.ExpiresAt) {
 			return apierr.New(apierr.CodeMonotonicity, "child expiresAt is later than parent")
@@ -144,7 +124,6 @@ func checkSubset(field string, parent, child map[string]struct{}) error {
 	return nil
 }
 
-// ErrMonotonicity wraps a monotonicity violation with context.
 func ErrMonotonicity(msg string) error {
 	return fmt.Errorf("delegation: %w", apierr.New(apierr.CodeMonotonicity, msg))
 }

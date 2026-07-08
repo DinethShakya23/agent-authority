@@ -25,8 +25,6 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/passport"
 )
 
-// Passport verifies the AI-Passport JWS against the trust bundle and
-// populates s.Passport (step 3 of §9.4).
 type Passport struct {
 	verifier passport.Verifier
 	bundle   *x509.CertPool
@@ -42,6 +40,12 @@ func (p Passport) Run(ctx context.Context, s *integration.State) (firewall.Outco
 	if s.PassportJWS == "" {
 		s.ReasonCode = string(apierr.CodePassportInvalid)
 		s.ReasonMsg = "passport JWS is empty (stage 1 must run first)"
+		return firewall.Deny, nil
+	}
+
+	if p.verifier == nil {
+		s.ReasonCode = string(apierr.CodeMisconfiguration)
+		s.ReasonMsg = "no passport verifier configured"
 		return firewall.Deny, nil
 	}
 

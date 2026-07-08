@@ -22,8 +22,6 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// Audience verifies that the passport audience list contains this integration's
-// audience URI (step 10 of §9.4).
 type Audience struct{}
 
 func NewAudience() *Audience { return &Audience{} }

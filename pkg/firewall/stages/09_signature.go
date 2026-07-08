@@ -30,12 +30,6 @@ import (
 	aipcrypto "github.com/thev1ndu/agent-integrator/pkg/crypto"
 )
 
-// Signature reconstructs the AIP-1 canonical string from the received request
-// fields and verifies the Ed25519 AI-Signature using the certificate public key
-// (step 9 of §9.4).
-//
-// The canonical string is rebuilt independently from headers — it is NEVER
-// taken from a client-supplied value.
 type Signature struct {
 	verifier aipcrypto.SigVerifier
 }
@@ -107,8 +101,6 @@ func (sg Signature) Run(ctx context.Context, s *integration.State) (firewall.Out
 	return firewall.Continue, nil
 }
 
-// canonicalPath returns the request path with query params sorted by key then value,
-// as required by AIP-1 §9.2.
 func canonicalPath(r *http.Request) string {
 	path := r.URL.Path
 	q := r.URL.Query()

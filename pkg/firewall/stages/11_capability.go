@@ -22,27 +22,23 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// CapabilityChecker looks up the resource type for an incoming request and
-// checks whether a required capability grants access to that resource type.
-// Implementations must be non-blocking (cached control-plane data).
 type CapabilityChecker interface {
-	// RequiredCapability returns the capability name required for this request.
-	// Typically derived from the HTTP method + path pattern.
-	RequiredCapability(r interface{ Method() string; PathPattern() string }) string
+	RequiredCapability(r interface {
+		Method() string
+		PathPattern() string
+	}) string
 
-	// ResourceType returns the resource type for this request.
-	ResourceType(r interface{ Method() string; PathPattern() string }) string
+	ResourceType(r interface {
+		Method() string
+		PathPattern() string
+	}) string
 }
 
-// Capability verifies that the passport authority grants the capability and
-// resource type required for this request (step 11 of §9.4).
 type Capability struct {
 	requiredCapability   string
 	requiredResourceType string
 }
 
-// NewCapability creates a Capability stage configured with the required
-// capability name and resource type for this integration endpoint.
 func NewCapability(requiredCapability, requiredResourceType string) *Capability {
 	return &Capability{
 		requiredCapability:   requiredCapability,

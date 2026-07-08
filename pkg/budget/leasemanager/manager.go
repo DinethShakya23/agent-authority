@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package leasemanager is the in-process, data-plane implementation of
-// budget.LeaseManager. All operations are in-memory against the local Lease;
-// no network calls are made. This is by design: the data-plane request path
-// must not make synchronous control-plane calls (Invariant I1).
-//
-// Lifecycle per request:
-//
-//	Reserve → forward → Commit    (upstream success)
-//	Reserve → forward → Release   (clean upstream failure)
-//	Reserve → forward → Hold      (AMBIGUOUS timeout — never release)
-//
-// Ambiguous timeout → HOLD. Stranded budget is recoverable via lease expiry;
-// overspend is not.
 package leasemanager
 
 import (
@@ -40,7 +27,7 @@ import (
 type reservation struct {
 	id     budget.ReservationID
 	values budget.Meters
-	held   bool // true = HOLD (ambiguous timeout) — never release
+	held   bool
 }
 
 type manager struct {
@@ -50,7 +37,6 @@ type manager struct {
 	nextID       int64
 }
 
-// New creates a new LeaseManager seeded with the given Lease.
 func New(l *budget.Lease) budget.LeaseManager {
 	return &manager{
 		lease:        l,
@@ -75,8 +61,6 @@ func formatFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-// available computes Available[m] = Granted[m] - Consumed[m] - Reserved[m]
-// for meter m. Must be called with m.mu held.
 func (m *manager) available(meter string) float64 {
 	granted := parseFloat(m.lease.Granted[meter])
 	consumed := parseFloat(m.lease.Consumed[meter])
@@ -87,8 +71,6 @@ func (m *manager) available(meter string) float64 {
 	return granted - consumed - reserved
 }
 
-// Reserve atomically checks that Available[m] >= values[m] for each meter,
-// then records a pending reservation. Returns AI-6001/6002/6003/6004 on failure.
 func (m *manager) Reserve(executionID string, values budget.Meters) (budget.ReservationID, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -101,7 +83,6 @@ func (m *manager) Reserve(executionID string, values budget.Meters) (budget.Rese
 			"lease execution mismatch: want %s got %s", executionID, m.lease.ExecutionID)
 	}
 
-	// Check all meters before reserving any (all-or-nothing).
 	for meter, valStr := range values {
 		val := parseFloat(valStr)
 		avail := m.available(meter)
@@ -127,7 +108,6 @@ func (m *manager) Reserve(executionID string, values budget.Meters) (budget.Rese
 	return id, nil
 }
 
-// Commit moves the reserved amount into Consumed. Call on upstream success.
 func (m *manager) Commit(id budget.ReservationID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -148,8 +128,6 @@ func (m *manager) Commit(id budget.ReservationID) error {
 	return nil
 }
 
-// Release returns the reserved amount to Available. Call on clean upstream failure.
-// No-op if the reservation does not exist (already committed or held).
 func (m *manager) Release(id budget.ReservationID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -159,15 +137,12 @@ func (m *manager) Release(id budget.ReservationID) error {
 		return nil
 	}
 	if r.held {
-		// HOLD means "never release"; respect that.
 		return nil
 	}
 	delete(m.reservations, id)
 	return nil
 }
 
-// Hold marks the reservation as permanently stranded until the lease TTL
-// expires. Call on ambiguous upstream timeout — never release ambiguous spend.
 func (m *manager) Hold(id budget.ReservationID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -180,7 +155,6 @@ func (m *manager) Hold(id budget.ReservationID) error {
 	return nil
 }
 
-// Stats returns a read-only snapshot of the current lease state.
 func (m *manager) Stats() budget.LeaseStats {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -218,14 +192,12 @@ func (m *manager) Stats() budget.LeaseStats {
 	}
 }
 
-// RefreshLease replaces the current lease with a renewed one.
 func (m *manager) RefreshLease(l *budget.Lease) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lease = l
 }
 
-// cloneMeters returns a shallow copy of a Meters map.
 func cloneMeters(src budget.Meters) budget.Meters {
 	if src == nil {
 		return nil

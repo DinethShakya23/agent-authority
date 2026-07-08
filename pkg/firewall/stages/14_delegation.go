@@ -26,26 +26,14 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/passport"
 )
 
-// Delegation verifies the AI-Chain delegation chain for monotonic attenuation
-// (step 14 of §9.4). If no AI-Chain header is present, the stage is a no-op.
-//
-// When a chain is present:
-//  1. Each JWS in ChainJWSs is verified against the trust bundle.
-//  2. The full chain (including the leaf passport) is passed to the ChainVerifier.
-//  3. s.ChainPassports is populated with the parsed chain (excluding leaf).
 type Delegation struct {
-	verifier        passport.Verifier
-	chainVerifier   delegation.ChainVerifier
-	bundle          interface{ Subjects() []string }
-	bundlePool      interface{}
-	maxDepth        int
+	verifier      passport.Verifier
+	chainVerifier delegation.ChainVerifier
+	bundle        interface{ Subjects() []string }
+	bundlePool    interface{}
+	maxDepth      int
 }
 
-// NewDelegation creates a Delegation stage.
-//   - passportVerifier verifies each JWS in the chain.
-//   - chainVerifier checks monotonic attenuation.
-//   - bundle is the x509 cert pool used for JWS verification.
-//   - maxDepth is the maximum permitted delegation depth (from AgentPolicy).
 func NewDelegation(
 	passportVerifier passport.Verifier,
 	chainVerifier delegation.ChainVerifier,
@@ -73,6 +61,12 @@ func (d Delegation) Run(ctx context.Context, s *integration.State) (firewall.Out
 	if s.Passport == nil {
 		s.ReasonCode = string(apierr.CodePassportInvalid)
 		s.ReasonMsg = "passport not populated (stage 3 must run first)"
+		return firewall.Deny, nil
+	}
+
+	if d.verifier == nil {
+		s.ReasonCode = string(apierr.CodeMisconfiguration)
+		s.ReasonMsg = "no passport verifier configured for delegation chain"
 		return firewall.Deny, nil
 	}
 

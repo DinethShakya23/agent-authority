@@ -24,12 +24,8 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// maxClockSkew is the maximum permitted difference between the passport's
-// NotBefore/ExpiresAt and the local clock (§9.4 step 5).
 const maxClockSkew = 2 * time.Second
 
-// Validity checks the passport validity window against the local clock,
-// allowing up to maxClockSkew drift (step 5 of §9.4).
 type Validity struct{}
 
 func NewValidity() *Validity { return &Validity{} }

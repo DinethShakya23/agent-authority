@@ -25,8 +25,6 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// Certificate parses the DER-encoded leaf certificate, verifies it chains to a
-// trusted root, and checks validity period and key usage (step 2 of §9.4).
 type Certificate struct {
 	roots *x509.CertPool
 }

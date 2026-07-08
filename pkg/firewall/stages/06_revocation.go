@@ -24,19 +24,11 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// RevocationChecker is the read-only interface used by stage 6 to look up
-// whether a passport ID is revoked and what the current epoch is for an agent.
-// Implementations must be non-blocking (cached local state, no network calls).
 type RevocationChecker interface {
-	// IsRevoked returns true if passportID has been revoked.
 	IsRevoked(ctx context.Context, passportID string) (bool, error)
-	// CurrentEpoch returns the current epoch for the given agent ID.
-	// Used to enforce passport.epoch >= currentEpoch.
 	CurrentEpoch(ctx context.Context, agentID string) (uint64, error)
 }
 
-// Revocation checks that the passport is not revoked and that its epoch is
-// at least the current epoch for the agent (step 6 of §9.4).
 type Revocation struct {
 	checker RevocationChecker
 }

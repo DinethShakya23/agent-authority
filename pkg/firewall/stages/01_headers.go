@@ -24,7 +24,6 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// Headers parses and validates the required AIP-1 HTTP headers.
 type Headers struct{}
 
 func NewHeaders() *Headers { return &Headers{} }
@@ -97,7 +96,6 @@ func (Headers) Run(ctx context.Context, s *integration.State) (firewall.Outcome,
 	}
 	s.Signature = sig
 
-	// Optional chain header: comma-separated base64url JWSs.
 	if chain := r.Header.Get("AI-Chain"); chain != "" {
 		for _, jws := range strings.Split(chain, ",") {
 			s.ChainJWSs = append(s.ChainJWSs, strings.TrimSpace(jws))

@@ -24,12 +24,7 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
-// ConstraintEvaluator evaluates Cedar per-request predicates.
-// The evaluator must be non-blocking (policies are pre-compiled and cached).
 type ConstraintEvaluator interface {
-	// Evaluate runs the Cedar policy identified by policyName at policyRevision
-	// against the provided per-request constraints and request context.
-	// Returns nil if all predicates pass, or a descriptive error otherwise.
 	Evaluate(
 		ctx context.Context,
 		policyName string,
@@ -39,29 +34,19 @@ type ConstraintEvaluator interface {
 	) error
 }
 
-// RequestContext extracts Cedar evaluation attributes from the incoming request.
 type RequestContext interface {
-	// Extract returns a flat string map of attributes for Cedar evaluation.
 	Extract(r interface{}) map[string]string
 }
 
-// Constraints evaluates Cedar per-request predicates defined in the passport
-// authority (step 13 of §9.4). A failure means DENY.
 type Constraints struct {
-	evaluator ConstraintEvaluator
-	// reqCtxExtractor optionally extracts request-level attributes for Cedar.
-	// If nil, an empty map is used.
+	evaluator       ConstraintEvaluator
 	reqCtxExtractor func(s *integration.State) map[string]string
 }
 
-// NewConstraints creates a Constraints stage.
-// evaluator may be nil to skip Cedar evaluation (useful when no Cedar policies
-// are configured for this integration).
 func NewConstraints(evaluator ConstraintEvaluator) *Constraints {
 	return &Constraints{evaluator: evaluator}
 }
 
-// WithContextExtractor adds a function that extracts request attributes for Cedar.
 func (c *Constraints) WithContextExtractor(fn func(s *integration.State) map[string]string) *Constraints {
 	c.reqCtxExtractor = fn
 	return c
@@ -81,8 +66,6 @@ func (c Constraints) Run(ctx context.Context, s *integration.State) (firewall.Ou
 		return firewall.Continue, nil
 	}
 
-	// If no evaluator is configured, we must fail closed — we cannot verify
-	// constraints that exist but have no evaluator.
 	if c.evaluator == nil {
 		s.ReasonCode = string(apierr.CodeConstraintFailed)
 		s.ReasonMsg = fmt.Sprintf("passport defines %d per-request constraint(s) but no Cedar evaluator is configured", len(constraints))
