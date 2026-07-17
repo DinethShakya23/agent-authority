@@ -17,19 +17,22 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/thev1ndu/agent-integrator/pkg/apierr"
+	"github.com/thev1ndu/agent-integrator/pkg/budget"
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
 )
 
 type Runner struct {
-	stages  []Stage
-	adapter integration.Adapter
+	stages       []Stage
+	adapter      integration.Adapter
+	leaseManager budget.LeaseManager
 }
 
-func NewRunner(stages []Stage, adapter integration.Adapter) *Runner {
-	return &Runner{stages: stages, adapter: adapter}
+func NewRunner(stages []Stage, adapter integration.Adapter, lm budget.LeaseManager) *Runner {
+	return &Runner{stages: stages, adapter: adapter, leaseManager: lm}
 }
 
 func (r *Runner) Stages() []Stage {
@@ -69,23 +72,62 @@ func (r *Runner) Handle(ctx context.Context, w http.ResponseWriter, req *http.Re
 		state.Decision = "ALLOW"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
 	switch state.Decision {
 	case "ALLOW":
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"decision":   "ALLOW",
-			"reasonCode": string(apierr.CodeOK),
-		})
+		upstreamReq, err := r.adapter.Prepare(ctx, &state)
+		if err != nil {
+			r.holdReservation(&state)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"decision":   "DENY",
+				"reasonCode": string(apierr.CodeMisconfiguration),
+				"message":    err.Error(),
+			})
+			return
+		}
+
+		resp, err := r.adapter.Forward(ctx, upstreamReq)
+		if err != nil {
+			r.holdReservation(&state)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"decision":   "DENY",
+				"reasonCode": string(apierr.CodeMisconfiguration),
+				"message":    "upstream unreachable",
+			})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			r.commitReservation(&state)
+		} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			r.releaseReservation(&state)
+		} else {
+			r.holdReservation(&state)
+		}
+
+		for k, vals := range resp.Header {
+			for _, v := range vals {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+
 	case "REQUIRE_APPROVAL":
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"decision":   "REQUIRE_APPROVAL",
 			"reasonCode": string(apierr.CodeApprovalRequired),
 			"message":    state.ReasonMsg,
 		})
+
 	default:
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(apierr.HTTPStatus(apierr.Code(state.ReasonCode)))
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"decision":   "DENY",
@@ -93,4 +135,25 @@ func (r *Runner) Handle(ctx context.Context, w http.ResponseWriter, req *http.Re
 			"message":    state.ReasonMsg,
 		})
 	}
+}
+
+func (r *Runner) commitReservation(state *integration.State) {
+	if r.leaseManager == nil || state.ReservationID == "" {
+		return
+	}
+	_ = r.leaseManager.Commit(budget.ReservationID(state.ReservationID))
+}
+
+func (r *Runner) releaseReservation(state *integration.State) {
+	if r.leaseManager == nil || state.ReservationID == "" {
+		return
+	}
+	_ = r.leaseManager.Release(budget.ReservationID(state.ReservationID))
+}
+
+func (r *Runner) holdReservation(state *integration.State) {
+	if r.leaseManager == nil || state.ReservationID == "" {
+		return
+	}
+	_ = r.leaseManager.Hold(budget.ReservationID(state.ReservationID))
 }

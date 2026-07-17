@@ -21,8 +21,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/thev1ndu/agent-integrator/pkg/budget"
+	"github.com/thev1ndu/agent-integrator/pkg/budget/leasemanager"
 	"github.com/thev1ndu/agent-integrator/pkg/delegation"
 	"github.com/thev1ndu/agent-integrator/pkg/firewall"
 	"github.com/thev1ndu/agent-integrator/pkg/firewall/stages"
@@ -45,6 +48,20 @@ func (noopRevocationChecker) CurrentEpoch(_ context.Context, _ string) (uint64, 
 	return 0, nil
 }
 
+func bootstrapLease() *budget.Lease {
+	return &budget.Lease{
+		ID:          "dev-lease-001",
+		ExecutionID: "dev-exec-001",
+		ReplicaID:   "agentfw-0",
+		Epoch:       0,
+		Granted:     budget.Meters{"amount": "25000", "calls": "100"},
+		Consumed:    budget.Meters{"amount": "0", "calls": "0"},
+		Reserved:    budget.Meters{"amount": "0", "calls": "0"},
+		IssuedAt:    time.Now().UTC(),
+		ExpiresAt:   time.Now().UTC().Add(24 * time.Hour),
+	}
+}
+
 func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -61,6 +78,10 @@ func run(cmd *cobra.Command, args []string) error {
 	adapter := integration.NewHTTPAdapter(audience, upstreamURL)
 	nonceCache := stages.NewNonceCache(0)
 
+	lease := bootstrapLease()
+	lm := leasemanager.New(lease)
+	extractor := stages.NewDefaultMeterExtractor()
+
 	stageList := []firewall.Stage{
 		stages.NewHeaders(),
 		stages.NewCertificate(nil),
@@ -76,9 +97,10 @@ func run(cmd *cobra.Command, args []string) error {
 		stages.NewSchema(nil, ""),
 		stages.NewConstraints(nil),
 		stages.NewDelegation(nil, delegation.DefaultVerifier{}, 8),
+		stages.NewBudget(lm, extractor),
 	}
 
-	pipeline := firewall.NewRunner(stageList, adapter)
+	pipeline := firewall.NewRunner(stageList, adapter, lm)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
