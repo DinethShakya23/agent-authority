@@ -37,21 +37,27 @@ type SCIM2Config struct {
 	RoleLabelPrefix string
 }
 
+type EpochBumper interface {
+	BumpAgentEpoch(ctx context.Context, agentName, namespace string) error
+}
+
 type scimSync struct {
 	providerType string
 	issuer       string
 	store        store.Store
 	cfg          SCIM2Config
 	httpClient   *http.Client
+	epochBumper  EpochBumper
 }
 
-func NewSCIMSync(providerType, issuer string, cfg SCIM2Config, s store.Store) SCIMSync {
+func NewSCIMSync(providerType, issuer string, cfg SCIM2Config, s store.Store, bumper EpochBumper) SCIMSync {
 	return &scimSync{
 		providerType: providerType,
 		issuer:       issuer,
 		store:        s,
 		cfg:          cfg,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		epochBumper:  bumper,
 	}
 }
 
@@ -136,6 +142,9 @@ func (s *scimSync) syncUser(ctx context.Context, user scimUser) (added, updated,
 			existing.Status.Phase = v1alpha1.AgentPhaseSuspended
 			if err := s.store.Put(ctx, agentKey, existing); err != nil {
 				return 0, 0, 0, fmt.Errorf("scim2: suspend %s: %w", user.UserName, err)
+			}
+			if s.epochBumper != nil {
+				s.epochBumper.BumpAgentEpoch(ctx, user.UserName, "default")
 			}
 			return 0, 0, 1, nil
 		}

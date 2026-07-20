@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/thev1ndu/agent-integrator/internal/cache"
 	"github.com/thev1ndu/agent-integrator/pkg/budget"
 	"github.com/thev1ndu/agent-integrator/pkg/budget/leasemanager"
 	"github.com/thev1ndu/agent-integrator/pkg/delegation"
@@ -36,16 +37,6 @@ var rootCmd = &cobra.Command{
 	Use:   "agentfw",
 	Short: "Agent Integrator firewall (data plane)",
 	RunE:  run,
-}
-
-type noopRevocationChecker struct{}
-
-func (noopRevocationChecker) IsRevoked(_ context.Context, _ string) (bool, error) {
-	return false, nil
-}
-
-func (noopRevocationChecker) CurrentEpoch(_ context.Context, _ string) (uint64, error) {
-	return 0, nil
 }
 
 func bootstrapLease() *budget.Lease {
@@ -82,13 +73,16 @@ func run(cmd *cobra.Command, args []string) error {
 	lm := leasemanager.New(lease)
 	extractor := stages.NewDefaultMeterExtractor()
 
+	fwCache := cache.New(24 * time.Hour)
+	fwCache.MarkRefreshed()
+
 	stageList := []firewall.Stage{
 		stages.NewHeaders(),
 		stages.NewCertificate(nil),
 		stages.NewPassport(nil, nil),
 		stages.NewBinding(),
 		stages.NewValidity(),
-		stages.NewRevocation(noopRevocationChecker{}),
+		stages.NewRevocation(fwCache),
 		stages.NewTimestamp(),
 		stages.NewNonce(nonceCache),
 		stages.NewSignature(nil),

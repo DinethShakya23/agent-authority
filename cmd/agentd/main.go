@@ -25,12 +25,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thev1ndu/agent-integrator/internal/apiserver"
+	"github.com/thev1ndu/agent-integrator/internal/cache"
 	agentctrl "github.com/thev1ndu/agent-integrator/internal/controller/agent"
 	capctrl "github.com/thev1ndu/agent-integrator/internal/controller/capability"
 	idsyncctrl "github.com/thev1ndu/agent-integrator/internal/controller/identitysync"
 	integctrl "github.com/thev1ndu/agent-integrator/internal/controller/integration"
 	passportctrl "github.com/thev1ndu/agent-integrator/internal/controller/passport"
 	policectrl "github.com/thev1ndu/agent-integrator/internal/controller/policy"
+	"github.com/thev1ndu/agent-integrator/internal/epochbumper"
 	"github.com/thev1ndu/agent-integrator/pkg/authority"
 	"github.com/thev1ndu/agent-integrator/pkg/budget/budgetauth"
 	"github.com/thev1ndu/agent-integrator/pkg/identity"
@@ -108,6 +110,14 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	fwCache := cache.New(10 * time.Second)
+	watcher := cache.NewWatcher(st, fwCache)
+	go func() {
+		if err := watcher.Run(ctx); err != nil {
+			log.Printf("cache watcher: %v", err)
+		}
+	}()
+
 	providerCfg := loadProviderConfig()
 	var fed identity.Federator
 	if providerCfg.WellKnown != "" {
@@ -118,7 +128,8 @@ func run(cmd *cobra.Command, args []string) error {
 
 		scimCfg := loadSCIM2Config()
 		if scimCfg.Enabled {
-			syncer := identity.NewSCIMSync(providerCfg.Type, providerCfg.WellKnown, scimCfg, st)
+			bumper := epochbumper.New(st)
+			syncer := identity.NewSCIMSync(providerCfg.Type, providerCfg.WellKnown, scimCfg, st, bumper)
 			go func() {
 				if err := idsyncctrl.New(syncer, scimCfg.SyncInterval).Run(ctx); err != nil {
 					log.Printf("identitysync controller: %v", err)
@@ -127,6 +138,8 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		log.Printf("agentd: identity federation enabled (type=%s issuer=%s)", providerCfg.Type, providerCfg.WellKnown)
 	}
+
+	_ = fwCache
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
