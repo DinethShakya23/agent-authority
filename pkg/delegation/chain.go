@@ -15,7 +15,10 @@
 package delegation
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"strconv"
 
 	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
 	"github.com/thev1ndu/agent-integrator/pkg/apierr"
@@ -62,6 +65,10 @@ func (DefaultVerifier) Verify(chain []*v1alpha1.AgentPassport, leaf *v1alpha1.Ag
 	return nil
 }
 
+func CheckMonotonicity(parent, child *v1alpha1.AgentPassport) error {
+	return checkMonotonicity(parent, child)
+}
+
 func checkMonotonicity(parent, child *v1alpha1.AgentPassport) error {
 	pa := parent.Spec.Authority
 	ca := child.Spec.Authority
@@ -90,12 +97,55 @@ func checkMonotonicity(parent, child *v1alpha1.AgentPassport) error {
 			}
 		}
 	}
+	if err := checkBudgetSubset(pa.Budget, ca.Budget); err != nil {
+		return err
+	}
 	if !child.Spec.Validity.ExpiresAt.IsZero() && !parent.Spec.Validity.ExpiresAt.IsZero() {
 		if child.Spec.Validity.ExpiresAt.After(parent.Spec.Validity.ExpiresAt) {
 			return apierr.New(apierr.CodeMonotonicity, "child expiresAt is later than parent")
 		}
 	}
 	return nil
+}
+
+func checkBudgetSubset(parent, child v1alpha1.BudgetLimit) error {
+	if child.Amount.Value != "" && parent.Amount.Value != "" {
+		cv, err := strconv.ParseFloat(child.Amount.Value, 64)
+		if err != nil {
+			return apierr.Newf(apierr.CodeMonotonicity, "child budget amount value unparseable: %s", child.Amount.Value)
+		}
+		pv, err := strconv.ParseFloat(parent.Amount.Value, 64)
+		if err != nil {
+			return apierr.Newf(apierr.CodeMonotonicity, "parent budget amount value unparseable: %s", parent.Amount.Value)
+		}
+		if cv > pv {
+			return apierr.Newf(apierr.CodeMonotonicity, "child budget amount %s exceeds parent %s", child.Amount.Value, parent.Amount.Value)
+		}
+	}
+	if child.Calls.Value != "" && parent.Calls.Value != "" {
+		cv, err := strconv.ParseFloat(child.Calls.Value, 64)
+		if err != nil {
+			return apierr.Newf(apierr.CodeMonotonicity, "child budget calls value unparseable: %s", child.Calls.Value)
+		}
+		pv, err := strconv.ParseFloat(parent.Calls.Value, 64)
+		if err != nil {
+			return apierr.Newf(apierr.CodeMonotonicity, "parent budget calls value unparseable: %s", parent.Calls.Value)
+		}
+		if cv > pv {
+			return apierr.Newf(apierr.CodeMonotonicity, "child budget calls %s exceeds parent %s", child.Calls.Value, parent.Calls.Value)
+		}
+	}
+	return nil
+}
+
+func ComputeChainHash(parentChainHash, childPassportID string) string {
+	h := sha256.Sum256([]byte(parentChainHash + childPassportID))
+	return hex.EncodeToString(h[:])
+}
+
+func RootChainHash(passportID string) string {
+	h := sha256.Sum256([]byte(passportID))
+	return hex.EncodeToString(h[:])
 }
 
 func toSet(ss []string) map[string]struct{} {

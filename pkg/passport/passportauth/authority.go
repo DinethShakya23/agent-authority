@@ -30,7 +30,9 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
+	"github.com/thev1ndu/agent-integrator/pkg/apierr"
 	"github.com/thev1ndu/agent-integrator/pkg/authority"
+	"github.com/thev1ndu/agent-integrator/pkg/delegation"
 	"github.com/thev1ndu/agent-integrator/pkg/passport"
 	"github.com/thev1ndu/agent-integrator/pkg/store"
 )
@@ -185,25 +187,26 @@ func (a *Authority) Issue(ctx context.Context, g authority.Grant, pub crypto.Pub
 	return pp, compact, nil
 }
 
+const defaultMaxDelegationDepth = 8
+
 func (a *Authority) Delegate(ctx context.Context, parentID string, proof passport.Signature, req passport.DelegationRequest) (*v1alpha1.AgentPassport, string, error) {
 	var passports []v1alpha1.AgentPassport
 	if err := a.store.List(ctx, "passports/", &passports); err != nil {
 		return nil, "", fmt.Errorf("passportauth: list passports: %w", err)
 	}
 
-	var parent *v1alpha1.AgentPassport
+	passportIndex := make(map[string]*v1alpha1.AgentPassport, len(passports))
 	for i := range passports {
-		if passports[i].Spec.PassportID == parentID {
-			parent = &passports[i]
-			break
-		}
+		passportIndex[passports[i].Spec.PassportID] = &passports[i]
 	}
-	if parent == nil {
+
+	parent, ok := passportIndex[parentID]
+	if !ok {
 		return nil, "", fmt.Errorf("passportauth: parent passport %s not found", parentID)
 	}
 
 	if parent.Status.Phase == v1alpha1.PassportPhaseRevoked {
-		return nil, "", fmt.Errorf("passportauth: parent passport %s is revoked", parentID)
+		return nil, "", apierr.Newf(apierr.CodeAncestorRevoked, "parent passport %s is revoked", parentID)
 	}
 	if parent.Status.Phase == v1alpha1.PassportPhaseExpired {
 		return nil, "", fmt.Errorf("passportauth: parent passport %s is expired", parentID)
@@ -212,6 +215,27 @@ func (a *Authority) Delegate(ctx context.Context, parentID string, proof passpor
 	now := time.Now().UTC()
 	if now.After(parent.Spec.Validity.ExpiresAt) {
 		return nil, "", fmt.Errorf("passportauth: parent passport %s is expired", parentID)
+	}
+
+	cur := parent
+	for cur.Spec.Delegation.Parent != "" {
+		anc, exists := passportIndex[cur.Spec.Delegation.Parent]
+		if !exists {
+			return nil, "", apierr.Newf(apierr.CodeBrokenChain, "ancestor passport %s not found", cur.Spec.Delegation.Parent)
+		}
+		if anc.Status.Phase == v1alpha1.PassportPhaseRevoked {
+			return nil, "", apierr.Newf(apierr.CodeAncestorRevoked, "ancestor passport %s is revoked", anc.Spec.PassportID)
+		}
+		cur = anc
+	}
+
+	maxDepth := defaultMaxDelegationDepth
+	if req.MaxDepth > 0 {
+		maxDepth = req.MaxDepth
+	}
+	childDepth := parent.Spec.Delegation.Depth + 1
+	if childDepth > maxDepth {
+		return nil, "", apierr.Newf(apierr.CodeDepthExceeded, "delegation depth %d exceeds maxDepth %d", childDepth, maxDepth)
 	}
 
 	passportID, err := newPassportID()
@@ -224,14 +248,20 @@ func (a *Authority) Delegate(ctx context.Context, parentID string, proof passpor
 		expiresAt = req.Validity.ExpiresAt
 	}
 
+	parentChainHash := parent.Spec.Delegation.ChainHash
+	if parentChainHash == "" {
+		parentChainHash = delegation.RootChainHash(parent.Spec.PassportID)
+	}
+	chainHash := delegation.ComputeChainHash(parentChainHash, passportID)
+
 	child := &v1alpha1.AgentPassport{
 		TypeMeta:   parent.TypeMeta,
 		ObjectMeta: v1alpha1.ObjectMeta{Name: passportID, Namespace: parent.Namespace},
 		Spec: v1alpha1.AgentPassportSpec{
-			PassportID:   passportID,
-			Agent:        parent.Spec.Agent,
-			Execution:    parent.Spec.Execution,
-			Audience:     req.Audience,
+			PassportID: passportID,
+			Agent:      parent.Spec.Agent,
+			Execution:  parent.Spec.Execution,
+			Audience:   req.Audience,
 			Authority: v1alpha1.PassportAuthority{
 				Capabilities: req.Capabilities,
 				Resources:    req.Resources,
@@ -240,8 +270,9 @@ func (a *Authority) Delegate(ctx context.Context, parentID string, proof passpor
 			},
 			Confirmation: parent.Spec.Confirmation,
 			Delegation: v1alpha1.PassportDelegation{
-				Depth:  parent.Spec.Delegation.Depth + 1,
-				Parent: parentID,
+				Depth:     childDepth,
+				Parent:    parentID,
+				ChainHash: chainHash,
 			},
 			Policy: parent.Spec.Policy,
 			Validity: v1alpha1.Validity{
@@ -250,6 +281,10 @@ func (a *Authority) Delegate(ctx context.Context, parentID string, proof passpor
 			},
 			Epoch: parent.Spec.Epoch,
 		},
+	}
+
+	if err := delegation.CheckMonotonicity(parent, child); err != nil {
+		return nil, "", err
 	}
 
 	compact, err := a.signAndStore(ctx, child)

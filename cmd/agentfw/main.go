@@ -16,6 +16,9 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -31,6 +34,7 @@ import (
 	"github.com/thev1ndu/agent-integrator/pkg/firewall"
 	"github.com/thev1ndu/agent-integrator/pkg/firewall/stages"
 	"github.com/thev1ndu/agent-integrator/pkg/integration"
+	"github.com/thev1ndu/agent-integrator/pkg/receipt/receiptchain"
 )
 
 var rootCmd = &cobra.Command{
@@ -76,6 +80,18 @@ func run(cmd *cobra.Command, args []string) error {
 	fwCache := cache.New(24 * time.Hour)
 	fwCache.MarkRefreshed()
 
+	_, signingKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate receipt signing key: %w", err)
+	}
+
+	firewallID := os.Getenv("AGENTFW_ID")
+	if firewallID == "" {
+		firewallID = "agentfw-0"
+	}
+
+	rc := receiptchain.New(nil, signingKey, firewallID, 0)
+
 	stageList := []firewall.Stage{
 		stages.NewHeaders(),
 		stages.NewCertificate(nil),
@@ -94,7 +110,7 @@ func run(cmd *cobra.Command, args []string) error {
 		stages.NewBudget(lm, extractor),
 	}
 
-	pipeline := firewall.NewRunner(stageList, adapter, lm)
+	pipeline := firewall.NewRunner(stageList, adapter, lm, firewall.WithReceiptChain(rc))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
