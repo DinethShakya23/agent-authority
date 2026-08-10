@@ -4,11 +4,15 @@ agentd:
 agentfw:
   replicas: 2            # minimum 2 to exercise the lease protocol
   autoscaling: { enabled: false }
-wso2:
-  # External. This chart never deploys WSO2.
-  baseURL: https://wso2.example:9443
-  organization: acme
+idp:
+  # External OIDC-compliant IdP (WSO2, Auth0, Okta, Keycloak, etc.).
+  # The federation adapter connects to whatever the operator configures.
+  type: oidc
+  wellKnown: ""
   audience: agent-integrator
+  scim2:
+    enabled: false
+    endpoint: ""
 ca:
   provider: cert-manager
 telemetry:

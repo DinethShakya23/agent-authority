@@ -1,15 +1,9 @@
 name: agent-integrator
-services:
-  wso2is:
-    image: wso2/wso2is:7.2.0
-    ports: ["9443:9443"]
-    healthcheck:
-      test: ["CMD", "curl", "-fk", "https://localhost:9443/carbon/admin/login.jsp"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
+  # Identity provider is external (any OIDC-compliant SaaS IdP).
+  # The federation adapter connects to whatever IdP the operator configures
+  # via IDP_WELL_KNOWN. WSO2, Auth0, Okta, Keycloak all work out of the box.
 
+services:
   step-ca:
     image: smallstep/step-ca:latest
     ports: ["9000:9000"]
@@ -26,19 +20,17 @@ services:
   agentd:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentd }
     depends_on:
-      wso2is: { condition: service_healthy }
       step-ca: { condition: service_healthy }
     ports: ["8443:8443"]
     environment:
       - AGENTD_DB_PATH=/var/lib/agentd/state.db
-      - IDP_WELL_KNOWN=https://wso2is:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
-      - IDP_TYPE=oidc
-      - IDP_AUDIENCE=agent-integrator
-      - IDP_ISSUER_FALLBACK=true
-      - SCIM2_ENABLED=true
-      - SCIM2_ENDPOINT=https://wso2is:9443/scim2
-      - SCIM2_CREDENTIALS_REF=admin:admin
-      - SCIM2_SYNC_INTERVAL=1m
+      - IDP_TYPE=${IDP_TYPE:-oidc}
+      - IDP_WELL_KNOWN=${IDP_WELL_KNOWN:-}
+      - IDP_AUDIENCE=${IDP_AUDIENCE:-agent-integrator}
+      - SCIM2_ENABLED=${SCIM2_ENABLED:-false}
+      - SCIM2_ENDPOINT=${SCIM2_ENDPOINT:-}
+      - SCIM2_CREDENTIALS_REF=${SCIM2_CREDENTIALS_REF:-}
+      - SCIM2_SYNC_INTERVAL=${SCIM2_SYNC_INTERVAL:-5m}
     volumes:
       - agentd-data:/var/lib/agentd
     healthcheck:

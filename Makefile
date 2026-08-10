@@ -25,9 +25,8 @@ fmt: ## gofmt + goimports
 tidy: ## go mod tidy across modules
 	go mod tidy && (cd sdk/go && go mod tidy) && (cd abench && go mod tidy)
 
-dev-up: ## Start local stack (WSO2, step-ca, agentd, 2x agentfw, mock-sap, otel)
+dev-up: ## Start local stack (step-ca, agentd, 2x agentfw, mock-sap, otel)
 	docker compose -f deploy/docker/docker-compose.yaml up -d --wait
-	./deploy/docker/wso2/seed.sh
 
 dev-down: ## Tear down local stack
 	docker compose -f deploy/docker/docker-compose.yaml down -v
