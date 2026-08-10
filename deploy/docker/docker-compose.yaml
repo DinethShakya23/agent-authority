@@ -3,30 +3,122 @@ services:
   wso2is:
     image: wso2/wso2is:7.2.0
     ports: ["9443:9443"]
+    healthcheck:
+      test: ["CMD", "curl", "-fk", "https://localhost:9443/carbon/admin/login.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
   step-ca:
     image: smallstep/step-ca:latest
     ports: ["9000:9000"]
+    volumes:
+      - ./stepca/ca.json:/home/step/config/ca.json:ro
+      - stepca-data:/home/step
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   agentd:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentd }
-    depends_on: [wso2is, step-ca]
+    depends_on:
+      wso2is: { condition: service_healthy }
+      step-ca: { condition: service_healthy }
     ports: ["8443:8443"]
+    environment:
+      - AGENTD_DB_PATH=/var/lib/agentd/state.db
+      - IDP_WELL_KNOWN=https://wso2is:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+      - IDP_TYPE=oidc
+      - IDP_AUDIENCE=agent-integrator
+      - IDP_ISSUER_FALLBACK=true
+      - SCIM2_ENABLED=true
+      - SCIM2_ENDPOINT=https://wso2is:9443/scim2
+      - SCIM2_CREDENTIALS_REF=admin:admin
+      - SCIM2_SYNC_INTERVAL=1m
+    volumes:
+      - agentd-data:/var/lib/agentd
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8443/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   agentfw-1:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentfw }
-    environment: [REPLICA_ID=fw-1]
-    depends_on: [agentd]
+    depends_on:
+      agentd: { condition: service_healthy }
+      mock-sap: { condition: service_healthy }
     ports: ["8080:8080"]
+    environment:
+      - REPLICA_ID=fw-1
+      - AGENTFW_AUDIENCE=https://localhost:8443
+      - AGENTFW_UPSTREAM=http://mock-sap:9090
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   agentfw-2:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile.agentfw }
-    environment: [REPLICA_ID=fw-2]
-    depends_on: [agentd]
+    depends_on:
+      agentd: { condition: service_healthy }
+      mock-sap: { condition: service_healthy }
     ports: ["8081:8080"]
+    environment:
+      - REPLICA_ID=fw-2
+      - AGENTFW_AUDIENCE=https://localhost:8443
+      - AGENTFW_UPSTREAM=http://mock-sap:9090
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   mock-sap:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile.mocksap }
+    ports: ["9090:9090"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   jaeger:
     image: jaegertracing/all-in-one:latest
-    ports: ["16686:16686"]
+    ports:
+      - "16686:16686"
+      - "14250:14250"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  agentd-data: {}
+  stepca-data: {}
 
 # Two firewall replicas are required: the lease protocol is only exercised
 # when budget is shared across more than one enforcement point.

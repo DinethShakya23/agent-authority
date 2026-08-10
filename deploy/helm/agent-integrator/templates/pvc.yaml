@@ -1,0 +1,18 @@
+{{- if .Values.agentd.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-agentd-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: agent-integrator
+    app.kubernetes.io/component: agentd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.agentd.persistence.size }}
+{{- end }}

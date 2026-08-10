@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-agentd
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: agent-integrator
+    app.kubernetes.io/component: agentd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.agentd.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-integrator
+      app.kubernetes.io/component: agentd
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-integrator
+        app.kubernetes.io/component: agentd
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: agentd
+          image: "agent-integrator/agentd:{{ .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8443
+              protocol: TCP
+          env:
+            - name: AGENTD_DB_PATH
+              value: /var/lib/agentd/state.db
+            - name: IDP_WELL_KNOWN
+              value: {{ printf "%s/oauth2/oidcdiscovery/.well-known/openid-configuration" .Values.wso2.baseURL | quote }}
+            - name: IDP_TYPE
+              value: oidc
+            - name: IDP_AUDIENCE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Release.Name }}-config
+                  key: IDP_AUDIENCE
+            - name: IDP_ISSUER_FALLBACK
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Release.Name }}-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            {{- if .Values.agentd.persistence.enabled }}
+            - name: agentd-data
+              mountPath: /var/lib/agentd
+            {{- end }}
+      volumes:
+        {{- if .Values.agentd.persistence.enabled }}
+        - name: agentd-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-agentd-data
+        {{- end }}

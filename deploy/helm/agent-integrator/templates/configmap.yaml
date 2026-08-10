@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: agent-integrator
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  IDP_AUDIENCE: {{ .Values.wso2.audience | quote }}
+  AGENTFW_AUDIENCE: {{ .Values.wso2.audience | quote }}
+  AGENTFW_UPSTREAM: {{ printf "http://%s-mock-sap:9090" .Release.Name | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.telemetry.otlpEndpoint | quote }}
+  WSO2_BASE_URL: {{ .Values.wso2.baseURL | quote }}
+  WSO2_ORG: {{ .Values.wso2.organization | quote }}
