@@ -19,7 +19,7 @@ import (
 	"crypto/x509"
 	"net/http"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
 )
 
 type State struct {

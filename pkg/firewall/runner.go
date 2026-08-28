@@ -21,11 +21,11 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/budget"
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
-	"github.com/thev1ndu/agent-integrator/pkg/receipt"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/budget"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/pkg/receipt"
 )
 
 type Runner struct {

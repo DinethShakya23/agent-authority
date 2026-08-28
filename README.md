@@ -2,8 +2,8 @@
 
 **Execution-scoped, budget-limited, cryptographically verifiable authority for AI agents at enterprise integration boundaries.**
 
-[![CI](https://github.com/thev1ndu/agent-integrator/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/thev1ndu/agent-integrator/actions/workflows/ci.yaml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/thev1ndu/agent-integrator)](https://goreportcard.com/report/github.com/thev1ndu/agent-integrator)
+[![CI](https://github.com/DinethShakya23/agent-authority/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/DinethShakya23/agent-authority/actions/workflows/ci.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/DinethShakya23/agent-authority)](https://goreportcard.com/report/github.com/DinethShakya23/agent-authority)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.23-blue.svg)](go.mod)
 [![Spec](https://img.shields.io/badge/spec-AIP--1%20v0.1-informational)](spec/AIP-1.md)
@@ -155,8 +155,8 @@ make build
 Agent Integrator ships adapters for any OIDC-compliant provider. Import the adapter and it self-registers:
 
 ```go
-import _ "github.com/thev1ndu/agent-integrator/pkg/identity/wso2"  // WSO2
-import _ "github.com/thev1ndu/agent-integrator/pkg/identity/oidc"  // Auth0, Okta, Keycloak, …
+import _ "github.com/DinethShakya23/agent-authority/pkg/identity/wso2"  // WSO2
+import _ "github.com/DinethShakya23/agent-authority/pkg/identity/oidc"  // Auth0, Okta, Keycloak, …
 ```
 
 Configure via `agentd.yaml`:
@@ -241,7 +241,7 @@ Supported kinds:
 ## Go SDK
 
 ```bash
-go get github.com/thev1ndu/agent-integrator/sdk/go
+go get github.com/DinethShakya23/agent-authority/sdk/go
 ```
 
 The SDK is a separate Go module so agent authors do not pull the control plane into their dependency graph.

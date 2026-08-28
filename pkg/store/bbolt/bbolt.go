@@ -33,7 +33,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/thev1ndu/agent-integrator/pkg/store"
+	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
 const bucket = "agentintegrator"

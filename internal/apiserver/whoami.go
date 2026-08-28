@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/thev1ndu/agent-integrator/pkg/identity"
+	"github.com/DinethShakya23/agent-authority/pkg/identity"
 )
 
 type WhoamiResponse struct {

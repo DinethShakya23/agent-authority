@@ -18,7 +18,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
 )
 
 type Outcome int

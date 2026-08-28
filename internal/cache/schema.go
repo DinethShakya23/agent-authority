@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
 )
 
 type CachedSchemaValidator struct {

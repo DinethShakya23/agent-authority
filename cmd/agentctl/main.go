@@ -29,8 +29,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/thev1ndu/agent-integrator/internal/apiserver"
-	"github.com/thev1ndu/agent-integrator/internal/version"
+	"github.com/DinethShakya23/agent-authority/internal/apiserver"
+	"github.com/DinethShakya23/agent-authority/internal/version"
 )
 
 var serverAddr string

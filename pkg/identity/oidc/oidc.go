@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/identity"
-	"github.com/thev1ndu/agent-integrator/pkg/store"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/identity"
+	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
 func init() {

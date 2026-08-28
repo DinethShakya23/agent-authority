@@ -19,7 +19,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/thev1ndu/agent-integrator/pkg/store"
+	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
 type Registry struct {

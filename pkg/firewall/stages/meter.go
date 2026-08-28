@@ -15,8 +15,8 @@
 package stages
 
 import (
-	"github.com/thev1ndu/agent-integrator/pkg/budget"
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/pkg/budget"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
 )
 
 type DefaultMeterExtractor struct{}

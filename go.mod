@@ -1,4 +1,4 @@
-module github.com/thev1ndu/agent-integrator
+module github.com/DinethShakya23/agent-authority
 
 go 1.25
 

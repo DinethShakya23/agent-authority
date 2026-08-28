@@ -19,10 +19,10 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/firewall"
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
-	"github.com/thev1ndu/agent-integrator/pkg/passport"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/firewall"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/pkg/passport"
 )
 
 type Passport struct {

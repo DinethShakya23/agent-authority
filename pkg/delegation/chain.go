@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
 )
 
 type ChainVerifier interface {

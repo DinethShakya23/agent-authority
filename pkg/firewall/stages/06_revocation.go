@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/firewall"
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/firewall"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
 )
 
 type RevocationChecker interface {

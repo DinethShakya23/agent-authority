@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/budget"
-	"github.com/thev1ndu/agent-integrator/pkg/store"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/budget"
+	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
 type Config struct {

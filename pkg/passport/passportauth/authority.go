@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/authority"
-	"github.com/thev1ndu/agent-integrator/pkg/delegation"
-	"github.com/thev1ndu/agent-integrator/pkg/passport"
-	"github.com/thev1ndu/agent-integrator/pkg/store"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/authority"
+	"github.com/DinethShakya23/agent-authority/pkg/delegation"
+	"github.com/DinethShakya23/agent-authority/pkg/passport"
+	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
 type Authority struct {

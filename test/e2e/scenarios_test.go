@@ -23,17 +23,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thev1ndu/agent-integrator/api/v1alpha1"
-	"github.com/thev1ndu/agent-integrator/internal/cache"
-	"github.com/thev1ndu/agent-integrator/pkg/apierr"
-	"github.com/thev1ndu/agent-integrator/pkg/budget"
-	"github.com/thev1ndu/agent-integrator/pkg/budget/leasemanager"
-	"github.com/thev1ndu/agent-integrator/pkg/delegation"
-	"github.com/thev1ndu/agent-integrator/pkg/firewall"
-	"github.com/thev1ndu/agent-integrator/pkg/firewall/stages"
-	"github.com/thev1ndu/agent-integrator/pkg/integration"
-	"github.com/thev1ndu/agent-integrator/pkg/receipt"
-	"github.com/thev1ndu/agent-integrator/pkg/receipt/receiptchain"
+	"github.com/DinethShakya23/agent-authority/api/v1alpha1"
+	"github.com/DinethShakya23/agent-authority/internal/cache"
+	"github.com/DinethShakya23/agent-authority/pkg/apierr"
+	"github.com/DinethShakya23/agent-authority/pkg/budget"
+	"github.com/DinethShakya23/agent-authority/pkg/budget/leasemanager"
+	"github.com/DinethShakya23/agent-authority/pkg/delegation"
+	"github.com/DinethShakya23/agent-authority/pkg/firewall"
+	"github.com/DinethShakya23/agent-authority/pkg/firewall/stages"
+	"github.com/DinethShakya23/agent-authority/pkg/integration"
+	"github.com/DinethShakya23/agent-authority/pkg/receipt"
+	"github.com/DinethShakya23/agent-authority/pkg/receipt/receiptchain"
 )
 
 const (
