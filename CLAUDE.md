@@ -1,4 +1,4 @@
-# Agent Integrator — CLAUDE.md
+# Agent Authority — CLAUDE.md
 
 ## Code style
 

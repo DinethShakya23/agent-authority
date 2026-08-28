@@ -4,11 +4,11 @@ A citable artefact independent of this implementation. Anyone can run it
 against any agent-authorisation mechanism.
 
 ## Baselines
-- A: WSO2 bearer token -> API (the honest "without Agent Integrator" case)
+- A: WSO2 bearer token -> API (the honest "without Agent Authority" case)
 - B: API gateway -> API
 - C: cloud IAM -> API
 - D: MCP authorization -> tool (v0.2)
-- P: Agent Integrator
+- P: Agent Authority
 
 ## Pre-registered protocol
 Fixed hardware, pinned Go, mock upstream at 20 ms, warmed caches,

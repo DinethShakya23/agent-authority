@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-config
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: agent-integrator
+    app.kubernetes.io/name: agent-authority
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:

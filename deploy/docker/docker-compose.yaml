@@ -1,4 +1,4 @@
-name: agent-integrator
+name: agent-authority
   # Identity provider is external (any OIDC-compliant SaaS IdP).
   # The federation adapter connects to whatever IdP the operator configures
   # via IDP_WELL_KNOWN. WSO2, Auth0, Okta, Keycloak all work out of the box.
@@ -26,7 +26,7 @@ services:
       - AGENTD_DB_PATH=/var/lib/agentd/state.db
       - IDP_TYPE=${IDP_TYPE:-oidc}
       - IDP_WELL_KNOWN=${IDP_WELL_KNOWN:-}
-      - IDP_AUDIENCE=${IDP_AUDIENCE:-agent-integrator}
+      - IDP_AUDIENCE=${IDP_AUDIENCE:-agent-authority}
       - SCIM2_ENABLED=${SCIM2_ENABLED:-false}
       - SCIM2_ENDPOINT=${SCIM2_ENDPOINT:-}
       - SCIM2_CREDENTIALS_REF=${SCIM2_CREDENTIALS_REF:-}

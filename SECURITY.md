@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Report vulnerabilities privately to **security@agentintegrator.dev** (or via
+Report vulnerabilities privately to **security@agentauthority.dev** (or via
 GitHub private vulnerability reporting). Do not open a public issue.
 
 Acknowledgement within 3 working days; assessment within 10; coordinated

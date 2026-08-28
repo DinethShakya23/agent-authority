@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,4 +15,4 @@
 package version
 
 const Version = "v0.1.0"
-const APIVersion = "agentintegrator.dev/v1alpha1"
+const APIVersion = "agentauthority.dev/v1alpha1"

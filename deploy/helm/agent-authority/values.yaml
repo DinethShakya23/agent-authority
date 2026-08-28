@@ -9,7 +9,7 @@ idp:
   # The federation adapter connects to whatever the operator configures.
   type: oidc
   wellKnown: ""
-  audience: agent-integrator
+  audience: agent-authority
   scim2:
     enabled: false
     endpoint: ""

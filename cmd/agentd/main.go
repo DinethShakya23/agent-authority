@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "agentd",
-	Short: "Agent Integrator control plane",
+	Short: "Agent Authority control plane",
 	RunE:  run,
 }
 
@@ -148,7 +148,7 @@ func run(cmd *cobra.Command, args []string) error {
 	mux.Handle("/apis/", apiSrv.Handler())
 
 	if fed != nil {
-		mux.HandleFunc("/apis/agentintegrator.dev/v1alpha1/whoami", apiserver.WhoamiHandler(fed))
+		mux.HandleFunc("/apis/agentauthority.dev/v1alpha1/whoami", apiserver.WhoamiHandler(fed))
 	}
 
 	addr := ":8443"

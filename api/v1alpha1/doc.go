@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package v1alpha1 contains the Agent Integrator API types.
+// Package v1alpha1 contains the Agent Authority API types.
 //
-// API group: agentintegrator.dev/v1alpha1
+// API group: agentauthority.dev/v1alpha1
 // Kinds: Agent, Capability, AgentPolicy, Integration, AgentExecution,
 // AgentPassport, DecisionReceipt (emitted, never authored).
 package v1alpha1

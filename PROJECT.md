@@ -1,4 +1,4 @@
-# Agent Integrator - project definition
+# Agent Authority - project definition
 
 > A cloud-native control plane and data plane that converts externally
 > authenticated agent identity into short-lived, cryptographically verifiable,

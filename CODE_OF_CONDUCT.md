@@ -3,4 +3,4 @@
 This project follows the CNCF Code of Conduct:
 https://github.com/cncf/foundation/blob/main/code-of-conduct.md
 
-Report concerns to conduct@agentintegrator.dev.
+Report concerns to conduct@agentauthority.dev.

@@ -1,4 +1,4 @@
-apiVersion: agentintegrator.dev/v1alpha1
+apiVersion: agentauthority.dev/v1alpha1
 kind: AgentPolicy
 metadata: { name: procurement-policy, namespace: finance }
 spec:

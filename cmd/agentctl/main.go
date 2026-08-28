@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ var serverAddr string
 
 var rootCmd = &cobra.Command{
 	Use:   "agentctl",
-	Short: "Agent Integrator operator CLI",
+	Short: "Agent Authority operator CLI",
 }
 
 var versionCmd = &cobra.Command{
@@ -268,7 +268,7 @@ func runWhoami(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	url := serverAddr + "/apis/agentintegrator.dev/v1alpha1/whoami"
+	url := serverAddr + "/apis/agentauthority.dev/v1alpha1/whoami"
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err

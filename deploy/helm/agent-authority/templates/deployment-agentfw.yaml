@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-agentfw
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: agent-integrator
+    app.kubernetes.io/name: agent-authority
     app.kubernetes.io/component: agentfw
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
@@ -12,19 +12,19 @@ spec:
   replicas: {{ .Values.agentfw.replicas }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: agent-integrator
+      app.kubernetes.io/name: agent-authority
       app.kubernetes.io/component: agentfw
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: agent-integrator
+        app.kubernetes.io/name: agent-authority
         app.kubernetes.io/component: agentfw
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       containers:
         - name: agentfw
-          image: "agent-integrator/agentfw:{{ .Chart.AppVersion }}"
+          image: "agent-authority/agentfw:{{ .Chart.AppVersion }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

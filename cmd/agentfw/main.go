@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "agentfw",
-	Short: "Agent Integrator firewall (data plane)",
+	Short: "Agent Authority firewall (data plane)",
 	RunE:  run,
 }
 

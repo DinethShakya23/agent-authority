@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,7 +158,7 @@ func (s *scimSync) syncUser(ctx context.Context, user scimUser) (added, updated,
 	now := time.Now().UTC()
 	agent := v1alpha1.Agent{
 		TypeMeta: v1alpha1.TypeMeta{
-			APIVersion: "agentintegrator.dev/v1alpha1",
+			APIVersion: "agentauthority.dev/v1alpha1",
 			Kind:       "Agent",
 		},
 		ObjectMeta: v1alpha1.ObjectMeta{

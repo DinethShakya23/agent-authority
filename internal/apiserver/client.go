@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-const clientAPIPrefix = "/apis/agentintegrator.dev/v1alpha1"
+const clientAPIPrefix = "/apis/agentauthority.dev/v1alpha1"
 
 // Apply PUTs the object to the correct route by inspecting its kind, namespace, and name.
 // obj must be JSON-serialisable and must contain top-level "kind", "metadata.name" (and

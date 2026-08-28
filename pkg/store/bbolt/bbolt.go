@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 // Package bbolt implements the store.Store interface using bbolt (embedded B-tree).
 //
-// All values are stored as JSON. A single top-level bucket "agentintegrator"
+// All values are stored as JSON. A single top-level bucket "agentauthority"
 // holds all keys. Transactions are serialisable (bbolt's read-write tx).
 //
 // Watch is implemented via an in-process fan-out: after each write, all
@@ -36,7 +36,7 @@ import (
 	"github.com/DinethShakya23/agent-authority/pkg/store"
 )
 
-const bucket = "agentintegrator"
+const bucket = "agentauthority"
 
 // Store is the bbolt-backed implementation of store.Store.
 type Store struct {

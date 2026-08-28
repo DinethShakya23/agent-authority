@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ var resources = map[string]resourceInfo{
 	"AgentPassport":  {plural: "passports", storePrefix: "passports"},
 }
 
-const apiPrefix = "/apis/agentintegrator.dev/v1alpha1"
+const apiPrefix = "/apis/agentauthority.dev/v1alpha1"
 
 var pluralToResource map[string]resourceInfo
 

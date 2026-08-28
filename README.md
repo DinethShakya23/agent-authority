@@ -1,4 +1,4 @@
-# Agent Integrator
+# Agent Authority
 
 **Execution-scoped, budget-limited, cryptographically verifiable authority for AI agents at enterprise integration boundaries.**
 
@@ -14,23 +14,23 @@
 
 An agent authorised for "purchase orders up to $10,000" can place four hundred $9,999 orders. OAuth scopes allow it. Per-request policy allows it.
 
-Agent Integrator does not: authority is a depletable budget scoped to one execution, metered across every firewall replica with a proven no-overspend bound — even under crashes and network partitions.
+Agent Authority does not: authority is a depletable budget scoped to one execution, metered across every firewall replica with a proven no-overspend bound — even under crashes and network partitions.
 
 ## How it fits with your IdP
 
 ```
-Agent ──► IdP (identity)          ──► Agent Integrator (authority + budget)
+Agent ──► IdP (identity)          ──► Agent Authority (authority + budget)
       ──► Agent Firewall (verify, meter, decide) ──► Enterprise system
 ```
 
-| Your IdP (WSO2, Auth0, Okta, …) | Agent Integrator |
+| Your IdP (WSO2, Auth0, Okta, …) | Agent Authority |
 |---|---|
 | Agent identity, lifecycle, authentication | Execution-scoped authority |
 | Roles, scopes, consent, `act` claim | Cumulative budgets and metering |
 | Token issuance and revocation | Per-request cryptographic proof and enforcement |
 
 Your IdP answers **who is this agent?**
-Agent Integrator answers **may it do this right now, and how much of its allowance is left?**
+Agent Authority answers **may it do this right now, and how much of its allowance is left?**
 
 ---
 
@@ -115,9 +115,9 @@ The scenario to run first is **scenario 9**: three $9,000 orders against a $25,0
 ### Helm (Kubernetes)
 
 ```bash
-helm install agent-integrator deploy/helm/agent-integrator \
+helm install agent-authority deploy/helm/agent-authority \
   --set wso2.baseURL=https://your-wso2:9443 \
-  --set wso2.audience=agent-integrator \
+  --set wso2.audience=agent-authority \
   --set telemetry.otlpEndpoint=http://your-collector:4317
 ```
 
@@ -152,7 +152,7 @@ make build
 
 ## Identity providers
 
-Agent Integrator ships adapters for any OIDC-compliant provider. Import the adapter and it self-registers:
+Agent Authority ships adapters for any OIDC-compliant provider. Import the adapter and it self-registers:
 
 ```go
 import _ "github.com/DinethShakya23/agent-authority/pkg/identity/wso2"  // WSO2
@@ -165,7 +165,7 @@ Configure via `agentd.yaml`:
 identity:
   type: oidc    # or "wso2"
   wellKnown: https://your-tenant.auth0.com/.well-known/openid-configuration
-  audience: agent-integrator
+  audience: agent-authority
   acceptOnBehalfOf: true
 ```
 
@@ -182,7 +182,7 @@ func init() {
 ## Defining policy
 
 ```yaml
-apiVersion: agentintegrator.dev/v1alpha1
+apiVersion: agentauthority.dev/v1alpha1
 kind: AgentPolicy
 metadata:
   name: procurement-policy
@@ -327,7 +327,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). DCO
 
 - [Governance](GOVERNANCE.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md) — follows the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md)
-- [Security Policy](SECURITY.md) — report to `security@agentintegrator.dev` or via GitHub private vulnerability reporting
+- [Security Policy](SECURITY.md) — report to `security@agentauthority.dev` or via GitHub private vulnerability reporting
 
 ---
 
@@ -348,4 +348,4 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). DCO
 
 Apache License 2.0 — see [LICENSE](LICENSE).
 
-Copyright 2026 The Agent Integrator Authors.
+Copyright 2026 The Agent Authority Authors.

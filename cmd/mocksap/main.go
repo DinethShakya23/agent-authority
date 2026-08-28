@@ -1,4 +1,4 @@
-// Copyright 2026 Agent Integrator Authors
+// Copyright 2026 Agent Authority Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "mocksap",
-	Short: "Mock SAP backend for Agent Integrator demo",
+	Short: "Mock SAP backend for Agent Authority demo",
 	RunE:  run,
 }
 
